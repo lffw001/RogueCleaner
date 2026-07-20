@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 $src = Join-Path $root 'src\Launcher.cs'
+$v2Src = Join-Path $root 'src\v2'
 $manifest = Join-Path $root 'src\app.manifest'
 $icon = Join-Path $root 'src\app.ico'
 $obj = Join-Path $root 'obj'
@@ -33,6 +34,19 @@ function Copy-Utf8BomTextFile {
 if (!$PackageOnly) {
     New-Item -ItemType Directory -Path $obj -Force | Out-Null
 
+    $sources = @(
+        if (Test-Path -LiteralPath $v2Src -PathType Container) {
+            Get-ChildItem -LiteralPath $v2Src -Filter '*.cs' -File |
+                Sort-Object FullName |
+                ForEach-Object { $_.FullName }
+        } else {
+            $src
+        }
+    )
+    if ($sources.Count -eq 0) {
+        throw "没有找到 C# 源码文件。"
+    }
+
     $cscCandidates = @(
         "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
         "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
@@ -45,19 +59,23 @@ if (!$PackageOnly) {
         throw "缺少图标文件：$icon"
     }
 
-    & $csc /nologo /target:winexe /platform:anycpu /win32manifest:"$manifest" /win32icon:"$icon" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /out:"$exe" "$src"
+    $cscArgs = @(
+        '/nologo',
+        '/target:winexe',
+        '/platform:anycpu',
+        "/win32manifest:$manifest",
+        "/win32icon:$icon",
+        '/reference:System.Windows.Forms.dll',
+        '/reference:System.Drawing.dll',
+        '/reference:System.Web.Extensions.dll',
+        '/reference:System.Management.dll',
+        '/reference:System.ServiceProcess.dll',
+        '/reference:Microsoft.CSharp.dll',
+        "/out:$exe"
+    ) + $sources
+    & $csc @cscArgs
     if ($LASTEXITCODE -ne 0) {
         throw "csc 构建失败，退出码 $LASTEXITCODE"
-    }
-}
-
-if (!(Test-Path -LiteralPath $script -PathType Leaf)) {
-    throw "缺少运行脚本：$script"
-}
-foreach ($rule in @('vendors.json', 'locations.json', 'behaviors.json')) {
-    $rulePath = Join-Path $rules $rule
-    if (!(Test-Path -LiteralPath $rulePath -PathType Leaf)) {
-        throw "缺少规则文件：$rulePath"
     }
 }
 
@@ -69,15 +87,26 @@ if (Test-Path -LiteralPath $resolvedDist) {
     Remove-Item -LiteralPath $resolvedDist -Recurse -Force
 }
 New-Item -ItemType Directory -Path $resolvedDist -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $resolvedDist 'reports') -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $resolvedDist 'backups') -Force | Out-Null
 
 Copy-Item -LiteralPath $exe -Destination (Join-Path $resolvedDist '流氓软件克星.exe') -Force
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination (Join-Path $resolvedDist 'README.md') -Force
-Copy-Utf8BomTextFile -Source $script -Destination (Join-Path $resolvedDist 'RogueCleaner.ps1')
-Copy-Item -LiteralPath $rules -Destination (Join-Path $resolvedDist 'rules') -Recurse -Force
-if (Test-Path -LiteralPath $extractNote -PathType Leaf) {
-    Copy-Item -LiteralPath $extractNote -Destination (Join-Path $resolvedDist '先解压整个文件夹再运行.txt') -Force
+if (!(Test-Path -LiteralPath $v2Src -PathType Container)) {
+    if (!(Test-Path -LiteralPath $script -PathType Leaf)) {
+        throw "缺少运行脚本：$script"
+    }
+    foreach ($rule in @('vendors.json', 'locations.json', 'behaviors.json')) {
+        $rulePath = Join-Path $rules $rule
+        if (!(Test-Path -LiteralPath $rulePath -PathType Leaf)) {
+            throw "缺少规则文件：$rulePath"
+        }
+    }
+    New-Item -ItemType Directory -Path (Join-Path $resolvedDist 'reports') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $resolvedDist 'backups') -Force | Out-Null
+    Copy-Utf8BomTextFile -Source $script -Destination (Join-Path $resolvedDist 'RogueCleaner.ps1')
+    Copy-Item -LiteralPath $rules -Destination (Join-Path $resolvedDist 'rules') -Recurse -Force
+    if (Test-Path -LiteralPath $extractNote -PathType Leaf) {
+        Copy-Item -LiteralPath $extractNote -Destination (Join-Path $resolvedDist '先解压整个文件夹再运行.txt') -Force
+    }
 }
 
 Write-Host "EXE=$exe"
