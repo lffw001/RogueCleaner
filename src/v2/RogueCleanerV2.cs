@@ -183,6 +183,11 @@ namespace RogueCleanerV2
             get { return !string.Equals(ActionKind, "ReportOnly", StringComparison.OrdinalIgnoreCase); }
         }
 
+        public bool BulkSelectable
+        {
+            get { return CanClean && !string.Equals(ActionKind, "InvokeUninstaller", StringComparison.OrdinalIgnoreCase); }
+        }
+
         public string ActionText
         {
             get
@@ -192,6 +197,7 @@ namespace RogueCleanerV2
                 if (string.Equals(ActionKind, "MoveFileToBackup", StringComparison.OrdinalIgnoreCase)) return "移动到恢复中心";
                 if (string.Equals(ActionKind, "DisableService", StringComparison.OrdinalIgnoreCase)) return "备份状态后禁用服务";
                 if (string.Equals(ActionKind, "DisableScheduledTask", StringComparison.OrdinalIgnoreCase)) return "备份状态后禁用计划任务";
+                if (string.Equals(ActionKind, "InvokeUninstaller", StringComparison.OrdinalIgnoreCase)) return "弹出卸载器，用户自己确认";
                 return "仅提示，不一键动默认程序";
             }
         }
@@ -207,6 +213,7 @@ namespace RogueCleanerV2
         public string FilePath { get; set; }
         public string ServiceName { get; set; }
         public string TaskName { get; set; }
+        public string UninstallCommand { get; set; }
     }
 
     internal sealed class CleanupResult
@@ -319,6 +326,17 @@ namespace RogueCleanerV2
         public static bool IsKnownVendor(string text)
         {
             return ResolveVendorRule(text) != null;
+        }
+
+        public static bool HasBadComponent(string text)
+        {
+            VendorRule rule = ResolveVendorRule(text);
+            if (rule == null) return false;
+            foreach (string item in rule.BadComponents)
+            {
+                if (Contains(text, item)) return true;
+            }
+            return false;
         }
 
         private static VendorRule ResolveVendorRule(string text)
@@ -629,6 +647,7 @@ namespace RogueCleanerV2
         private List<Finding> ScanHiddenInstalledComponents()
         {
             List<Finding> list = new List<Finding>();
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (ActionTarget root in RegistryTargets(InstalledRoots, true, true))
             {
                 using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
@@ -637,7 +656,6 @@ namespace RogueCleanerV2
                     foreach (string childName in SafeSubKeyNames(key))
                     {
                         ActionTarget target = CopyTarget(root);
-                        target.Kind = "ReportOnly";
                         target.SubKey = root.SubKey + "\\" + childName;
                         using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
                         {
@@ -659,12 +677,28 @@ namespace RogueCleanerV2
                                 string.IsNullOrWhiteSpace(display) ||
                                 string.IsNullOrWhiteSpace(uninstall) ||
                                 !string.IsNullOrWhiteSpace(parentKey);
-                            if (!hidden) continue;
+                            bool suspiciousComponent = hidden || LooksLikeAdOrGuard(text) || RuleCatalog.HasBadComponent(text);
+                            if (!suspiciousComponent) continue;
                             string name = string.IsNullOrWhiteSpace(display) ? childName : display;
-                            string reason = HiddenInstallReason(display, uninstall, systemComponent, noRemove, parentKey);
-                            Finding finding = NewFinding("疑似捆绑组件/卸载入口异常", name, "安装列表可能不好找或没有正常卸载入口：" + reason + "。只提示，不一键卸载。", target, text, 5);
-                            finding.Risk = "低";
-                            list.Add(finding);
+                            string dedupeKey = Join(name, uninstall, installLocation);
+                            if (!seen.Add(dedupeKey)) continue;
+                            string reason = HiddenInstallReason(display, uninstall, systemComponent, noRemove, parentKey, hidden, LooksLikeAdOrGuard(text), RuleCatalog.HasBadComponent(text));
+                            if (!string.IsNullOrWhiteSpace(uninstall))
+                            {
+                                target.Kind = "InvokeUninstaller";
+                                target.UninstallCommand = uninstall;
+                                target.FilePath = installLocation;
+                                Finding finding = NewFinding("疑似捆绑/弹窗组件", name, "疑似捆绑、弹窗、守护或卸载入口异常：" + reason + "。工具只负责弹出它自己的卸载器，是否卸载由用户在卸载器里确认。", target, text, 16);
+                                finding.Risk = RuleCatalog.HasBadComponent(text) || LooksLikeAdOrGuard(text) ? "中" : "低";
+                                list.Add(finding);
+                            }
+                            else
+                            {
+                                target.Kind = "ReportOnly";
+                                Finding finding = NewFinding("疑似捆绑组件/卸载入口异常", name, "安装列表可能不好找或没有正常卸载入口：" + reason + "。只提示，不一键卸载。", target, text, 5);
+                                finding.Risk = "低";
+                                list.Add(finding);
+                            }
                         }
                     }
                 }
@@ -768,6 +802,7 @@ namespace RogueCleanerV2
                         string path = Convert.ToString(svc["PathName"]);
                         string desc = Convert.ToString(svc["Description"]);
                         string mode = Convert.ToString(svc["StartMode"]);
+                        if (mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase)) continue;
                         string text = Join(name, display, path, desc, mode);
                         if (!RuleCatalog.IsKnownVendor(text)) continue;
                         ActionTarget target = new ActionTarget { Kind = "DisableService", ServiceName = name };
@@ -806,6 +841,9 @@ namespace RogueCleanerV2
         {
             foreach (dynamic task in folder.GetTasks(1))
             {
+                bool enabled = true;
+                try { enabled = Convert.ToBoolean(task.Enabled); } catch { }
+                if (!enabled) continue;
                 string name = Convert.ToString(task.Name);
                 string path = Convert.ToString(task.Path);
                 string text = path;
@@ -868,7 +906,7 @@ namespace RogueCleanerV2
 
         private static ActionTarget CopyTarget(ActionTarget source)
         {
-            return new ActionTarget { Kind = source.Kind, Hive = source.Hive, View = source.View, SubKey = source.SubKey, ValueName = source.ValueName, FilePath = source.FilePath, ServiceName = source.ServiceName, TaskName = source.TaskName };
+            return new ActionTarget { Kind = source.Kind, Hive = source.Hive, View = source.View, SubKey = source.SubKey, ValueName = source.ValueName, FilePath = source.FilePath, ServiceName = source.ServiceName, TaskName = source.TaskName, UninstallCommand = source.UninstallCommand };
         }
 
         private static string[] SafeSubKeyNames(RegistryKey key)
@@ -981,7 +1019,7 @@ namespace RogueCleanerV2
             return value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string HiddenInstallReason(string display, string uninstall, string systemComponent, string noRemove, string parentKey)
+        private static string HiddenInstallReason(string display, string uninstall, string systemComponent, string noRemove, string parentKey, bool hidden, bool adOrGuard, bool badComponent)
         {
             List<string> reasons = new List<string>();
             if (string.IsNullOrWhiteSpace(display)) reasons.Add("没有显示名称");
@@ -989,7 +1027,9 @@ namespace RogueCleanerV2
             if (IsTruthy(systemComponent)) reasons.Add("标记为系统组件，控制面板可能隐藏");
             if (IsTruthy(noRemove)) reasons.Add("标记为不可移除");
             if (!string.IsNullOrWhiteSpace(parentKey)) reasons.Add("挂在其它组件下面");
-            return reasons.Count == 0 ? "卸载入口异常" : string.Join("，", reasons.ToArray());
+            if (!hidden && adOrGuard) reasons.Add("命中弹窗/守护特征");
+            if (!hidden && badComponent) reasons.Add("命中已知捆绑组件特征");
+            return reasons.Count == 0 ? "疑似捆绑组件" : string.Join("，", reasons.ToArray());
         }
 
         private static int RiskRank(string risk)
@@ -1172,6 +1212,12 @@ namespace RogueCleanerV2
                     result.Status = VerifyApplied(target) ? "Done" : "Failed";
                     result.Message = result.Status == "Done" ? "计划任务已禁用。" : "复核失败：计划任务仍未禁用。";
                 }
+                else if (target.Kind == "InvokeUninstaller")
+                {
+                    LaunchUninstaller(target.UninstallCommand);
+                    result.Status = "Launched";
+                    result.Message = "已弹出卸载器。请在卸载器窗口里自己确认卸载，完成后重新扫描。";
+                }
                 else
                 {
                     result.Status = "Skipped";
@@ -1193,6 +1239,7 @@ namespace RogueCleanerV2
             if (target.Kind == "DeleteRegistryValue") return !RegistryHelper.ValueExists(target);
             if (target.Kind == "MoveFileToBackup") return string.IsNullOrEmpty(target.FilePath) || !File.Exists(Environment.ExpandEnvironmentVariables(target.FilePath));
             if (target.Kind == "DisableService") return IsServiceDisabled(target.ServiceName);
+            if (target.Kind == "InvokeUninstaller") return true;
             if (target.Kind == "DisableScheduledTask")
             {
                 bool enabled;
@@ -1204,7 +1251,9 @@ namespace RogueCleanerV2
         private string BackupRegistry(string batchPath, ActionTarget target)
         {
             string native = RegistryHelper.NativePath(target);
-            string path = Path.Combine(Path.Combine(batchPath, "registry"), SafeFileName(native) + ".reg");
+            string backupName = native;
+            if (!string.IsNullOrEmpty(target.ValueName)) backupName += "__value__" + target.ValueName;
+            string path = Path.Combine(Path.Combine(batchPath, "registry"), SafeFileName(backupName) + ".reg");
             RunHidden("reg.exe", "export \"" + native + "\" \"" + path + "\" /y");
             return File.Exists(path) ? path : null;
         }
@@ -1369,6 +1418,54 @@ namespace RogueCleanerV2
             }
         }
 
+        private static void LaunchUninstaller(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) throw new InvalidOperationException("没有卸载命令。");
+            string file;
+            string args;
+            SplitCommandLine(Environment.ExpandEnvironmentVariables(command), out file, out args);
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = file;
+            psi.Arguments = args;
+            psi.UseShellExecute = true;
+            Process.Start(psi);
+        }
+
+        private static void SplitCommandLine(string command, out string file, out string args)
+        {
+            command = (command ?? string.Empty).Trim();
+            file = command;
+            args = string.Empty;
+            if (command.Length == 0) return;
+            if (command[0] == '"')
+            {
+                int close = command.IndexOf('"', 1);
+                if (close > 0)
+                {
+                    file = command.Substring(1, close - 1);
+                    args = command.Substring(close + 1).Trim();
+                    return;
+                }
+            }
+            foreach (string extension in new string[] { ".exe", ".cmd", ".bat", ".com" })
+            {
+                int exeEnd = command.IndexOf(extension, StringComparison.OrdinalIgnoreCase);
+                if (exeEnd > 0)
+                {
+                    exeEnd += extension.Length;
+                    file = command.Substring(0, exeEnd).Trim();
+                    args = command.Substring(exeEnd).Trim();
+                    return;
+                }
+            }
+            int split = command.IndexOf(' ');
+            if (split > 0)
+            {
+                file = command.Substring(0, split);
+                args = command.Substring(split + 1).Trim();
+            }
+        }
+
         private static string SafeFileName(string value)
         {
             foreach (char c in Path.GetInvalidFileNameChars()) value = value.Replace(c, '_');
@@ -1412,6 +1509,7 @@ namespace RogueCleanerV2
         public string Area;
         public string Needle;
         public bool RequiresAdmin;
+        public bool ExpectPresentAfterCleanScan;
         public bool SetupSucceeded;
         public string SetupMessage;
         public Action Create;
@@ -1430,7 +1528,8 @@ namespace RogueCleanerV2
             @"Software\Classes\Directory\Background\shell\CodexRogueCleanerTest_360Safe_RightMenu",
             @"Software\Classes\*\shell\CodexRogueCleanerTest_WPSPic_RightMenu",
             @"Software\Classes\Drive\shell\CodexRogueCleanerTest_kdesktop_WPSDisk",
-            @"Software\Google\Chrome\NativeMessagingHosts\com.codex.roguecleaner.BaiduNetdiskImageViewer"
+            @"Software\Google\Chrome\NativeMessagingHosts\com.codex.roguecleaner.BaiduNetdiskImageViewer",
+            @"Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexRogueCleanerTest_SogouAdComponent"
         };
 
         public static int Run(DataStore store)
@@ -1478,6 +1577,16 @@ namespace RogueCleanerV2
                 CleanerEngine cleaner = new CleanerEngine(store);
                 CleanupBatch batch = cleaner.Clean(matched);
                 List<Finding> afterClean = new ScannerEngine().ScanAll(null);
+                Dictionary<string, bool> cleanedStates = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, bool> absentAfterCleanScanStates = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                foreach (ValidationCase testCase in testCases)
+                {
+                    if (testCase.SetupSucceeded)
+                    {
+                        cleanedStates[testCase.Needle] = testCase.Cleaned();
+                        absentAfterCleanScanStates[testCase.Needle] = !afterClean.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
+                    }
+                }
                 cleaner.RestoreBatch(batch);
                 List<Finding> afterRestore = new ScannerEngine().ScanAll(null);
 
@@ -1500,15 +1609,16 @@ namespace RogueCleanerV2
                         result.DetectedBeforeClean = matched.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
                         CleanupResult cleanup = batch.Results.FirstOrDefault(delegate(CleanupResult r) { return Contains(r, testCase.Needle); });
                         result.CleanupStatus = cleanup == null ? "MissingCleanupResult" : cleanup.Status + ": " + cleanup.Message;
-                        result.CleanVerified = testCase.Cleaned();
+                        result.CleanVerified = cleanedStates.ContainsKey(testCase.Needle) && cleanedStates[testCase.Needle];
                         result.RestoreVerified = testCase.Restored();
-                        bool absentAfterCleanScan = !afterClean.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
+                        bool absentAfterCleanScan = absentAfterCleanScanStates.ContainsKey(testCase.Needle) && absentAfterCleanScanStates[testCase.Needle];
                         bool presentAfterRestoreScan = afterRestore.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
-                        bool pass = result.DetectedBeforeClean && result.CleanVerified && result.RestoreVerified && absentAfterCleanScan && presentAfterRestoreScan;
+                        bool cleanScanOk = testCase.ExpectPresentAfterCleanScan ? !absentAfterCleanScan : absentAfterCleanScan;
+                        bool pass = result.DetectedBeforeClean && result.CleanVerified && result.RestoreVerified && cleanScanOk && presentAfterRestoreScan;
                         result.Result = pass ? "Pass" : "Fail";
                         result.Message = pass
-                            ? "扫描命中、清理后回读消失、恢复后回读出现。"
-                            : "验收失败：Detected=" + result.DetectedBeforeClean + ", Cleaned=" + result.CleanVerified + ", Restored=" + result.RestoreVerified + ", ScanAbsentAfterClean=" + absentAfterCleanScan + ", ScanPresentAfterRestore=" + presentAfterRestoreScan;
+                            ? (testCase.ExpectPresentAfterCleanScan ? "扫描命中、卸载器已启动、条目保留给用户卸载确认。" : "扫描命中、清理后回读消失、恢复后回读出现。")
+                            : "验收失败：Detected=" + result.DetectedBeforeClean + ", Cleaned=" + result.CleanVerified + ", Restored=" + result.RestoreVerified + ", ScanAbsentAfterClean=" + absentAfterCleanScan + ", ExpectedPresentAfterCleanScan=" + testCase.ExpectPresentAfterCleanScan + ", ScanPresentAfterRestore=" + presentAfterRestoreScan;
                     }
                     report.Cases.Add(result);
                 }
@@ -1608,6 +1718,18 @@ namespace RogueCleanerV2
             });
             cases.Add(new ValidationCase
             {
+                Name = "疑似捆绑组件：不能静默时弹出原厂卸载器",
+                Vendor = "搜狗",
+                Area = "疑似捆绑/弹窗组件",
+                Needle = "CodexRogueCleanerTest_SogouAdComponent",
+                ExpectPresentAfterCleanScan = true,
+                Create = delegate { CreateUninstallEntry(TestKeys[4]); },
+                Exists = delegate { return RegistryKeyExists(TestKeys[4]); },
+                Cleaned = delegate { return WaitForFile(UninstallerMarkerPath(), 5000); },
+                Restored = delegate { return RegistryKeyExists(TestKeys[4]); }
+            });
+            cases.Add(new ValidationCase
+            {
                 Name = ".png 打开方式：百度网盘看图测试项",
                 Vendor = "百度 / 百度网盘",
                 Area = "文件关联/打开方式",
@@ -1664,6 +1786,7 @@ namespace RogueCleanerV2
             DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop");
             DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart");
             DeleteRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open");
+            try { File.Delete(UninstallerMarkerPath()); } catch { }
             RunProcess("schtasks.exe", "/Delete /TN \"" + TaskName + "\" /F");
             if (includeService) RunProcess("sc.exe", "delete \"" + ServiceName + "\"");
         }
@@ -1712,6 +1835,34 @@ namespace RogueCleanerV2
                 key.SetValue("", @"C:\CodexRogueCleanerTest\BaiduNetdiskImageViewer.json");
                 key.SetValue("Description", Marker + " BaiduNetdiskImageViewer");
             }
+        }
+
+        private static void CreateUninstallEntry(string keyPath)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+            {
+                key.SetValue("DisplayName", "搜狗弹窗组件 " + Marker + "_SogouAdComponent");
+                key.SetValue("Publisher", "搜狗");
+                key.SetValue("SystemComponent", 1, RegistryValueKind.DWord);
+                key.SetValue("InstallLocation", Path.Combine(Path.GetTempPath(), Marker));
+                key.SetValue("UninstallString", "cmd.exe /c echo CodexRogueCleanerTest_Uninstaller_Launched> \"" + UninstallerMarkerPath() + "\"");
+            }
+        }
+
+        private static string UninstallerMarkerPath()
+        {
+            return Path.Combine(Path.GetTempPath(), "CodexRogueCleanerTest_UninstallerLaunched.txt");
+        }
+
+        private static bool WaitForFile(string path, int timeoutMs)
+        {
+            Stopwatch watch = Stopwatch.StartNew();
+            while (watch.ElapsedMilliseconds < timeoutMs)
+            {
+                if (File.Exists(path)) return true;
+                Thread.Sleep(100);
+            }
+            return File.Exists(path);
         }
 
         private static void SetRegistryValue(string keyPath, string name, string value)
@@ -2094,10 +2245,12 @@ namespace RogueCleanerV2
                 return;
             }
             int high = selected.Count(delegate(Finding f) { return f.Risk == "高"; });
-            DialogResult answer = MessageBox.Show("准备清理 " + selected.Count + " 项，高风险 " + high + " 项。\n\n会先备份、再清理、最后复核和复扫。继续？", "确认清理", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            int uninstallers = selected.Count(delegate(Finding f) { return f.ActionKind == "InvokeUninstaller"; });
+            string uninstallNote = uninstallers > 0 ? "\n\n其中 " + uninstallers + " 项会弹出原厂卸载器，工具不会自动点卸载，需要你在卸载窗口里自己确认。" : string.Empty;
+            DialogResult answer = MessageBox.Show("准备处理 " + selected.Count + " 项，高风险 " + high + " 项。" + uninstallNote + "\n\n会先备份、再处理、最后复核和复扫。继续？", "确认处理", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
             if (answer != DialogResult.Yes) return;
 
-            SetBusy(true, "清理中：先备份，再动手，最后复核。");
+            SetBusy(true, "处理中：先备份，再动手，最后复核。");
             Task.Factory.StartNew(delegate
             {
                 try
@@ -2111,8 +2264,9 @@ namespace RogueCleanerV2
                         rows.Clear();
                         foreach (Finding finding in refreshed) rows.Add(finding);
                         int failed = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
-                        SetBusy(false, failed > 0 ? "清理后复核发现残留：" + failed + " 项。" : "清理完成，已自动复扫。");
-                        MessageBox.Show("成功：" + batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Done"; }) + " 项\n失败/残留：" + failed + " 项\n跳过：" + batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Skipped"; }) + " 项\n\n备份目录：" + batch.Path, failed > 0 ? "清理后仍有残留" : "清理完成", MessageBoxButtons.OK, failed > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                        int launched = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
+                        SetBusy(false, failed > 0 ? "处理后复核发现残留：" + failed + " 项。" : "处理完成，已自动复扫。");
+                        MessageBox.Show("成功清理：" + batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Done"; }) + " 项\n已弹出卸载器：" + launched + " 项\n失败/残留：" + failed + " 项\n跳过：" + batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Skipped"; }) + " 项\n\n备份目录：" + batch.Path, failed > 0 ? "处理后仍有残留" : "处理完成", MessageBoxButtons.OK, failed > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
                     });
                 }
                 catch (Exception ex)
@@ -2174,14 +2328,14 @@ namespace RogueCleanerV2
 
         private void SetAll(bool value)
         {
-            foreach (Finding finding in rows) finding.Selected = value && finding.CanClean;
+            foreach (Finding finding in rows) finding.Selected = value && finding.BulkSelectable;
             grid.Refresh();
             UpdateSummary();
         }
 
         private void SelectLowRisk()
         {
-            foreach (Finding finding in rows) finding.Selected = finding.Risk == "低" && finding.CanClean;
+            foreach (Finding finding in rows) finding.Selected = finding.Risk == "低" && finding.BulkSelectable;
             grid.Refresh();
             UpdateSummary();
         }

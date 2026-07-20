@@ -39,6 +39,7 @@ New-Item -ItemType Directory -Path $exeStage -Force | Out-Null
 
 foreach ($file in @(
     'README.md',
+    'LICENSE',
     'Build-Exe.ps1',
     'Build-OneClick-Sfx.ps1',
     'Build-Release-Packages.ps1',
@@ -49,19 +50,24 @@ foreach ($file in @(
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $sourceStage -Force
 }
 Copy-Item -LiteralPath (Join-Path $root 'src') -Destination $sourceStage -Recurse -Force
-Copy-Item -LiteralPath (Join-Path $root 'rules') -Destination $sourceStage -Recurse -Force
+foreach ($dir in @('docs', 'rules')) {
+    $dirPath = Join-Path $root $dir
+    if (Test-Path -LiteralPath $dirPath -PathType Container) {
+        Copy-Item -LiteralPath $dirPath -Destination $sourceStage -Recurse -Force
+    }
+}
 
 foreach ($file in @(
     '流氓软件克星.exe',
-    'README.md',
-    'RogueCleaner.ps1',
-    '先解压整个文件夹再运行.txt'
+    'README.md'
 )) {
     Copy-Item -LiteralPath (Join-Path $root "dist\流氓软件克星\$file") -Destination $exeStage -Force
 }
-Copy-Item -LiteralPath (Join-Path $root 'dist\流氓软件克星\rules') -Destination $exeStage -Recurse -Force
-foreach ($file in @('火绒误报回复.md', 'Win10Win11报错回复.md')) {
-    Copy-Item -LiteralPath (Join-Path $releaseRoot $file) -Destination $exeStage -Force
+foreach ($file in @('52pojie发布文案.md', '火绒误报回复.md', 'Win10Win11报错回复.md')) {
+    $releaseFile = Join-Path $releaseRoot $file
+    if (Test-Path -LiteralPath $releaseFile -PathType Leaf) {
+        Copy-Item -LiteralPath $releaseFile -Destination $exeStage -Force
+    }
 }
 
 $sourceArchive = Join-Path $releaseRoot "流氓软件克星_源码_$stamp.rar"
