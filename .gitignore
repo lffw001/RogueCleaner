@@ -1,0 +1,11 @@
+reports/*
+!reports/.gitkeep
+backups/*
+!backups/.gitkeep
+dist/
+obj/
+release/*.rar
+release/*.exe
+release/旧版勿发/
+icon-options/
+*.exe

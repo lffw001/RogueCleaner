@@ -1,0 +1,249 @@
+{
+  "trustedPublishers": [
+    "Microsoft Corporation",
+    "OpenAI",
+    "GitHub, Inc.",
+    "JetBrains s.r.o.",
+    "The Git Development Community",
+    "win.rar GmbH",
+    "NOTEPAD++"
+  ],
+  "vendors": [
+    {
+      "id": "qihoo360",
+      "name": "360 系列",
+      "snark": "右键桌面不够，还想住进开机启动。",
+      "riskBoost": 25,
+      "patterns": [
+        "Qihoo",
+        "Qihu",
+        "奇虎",
+        "360.cn",
+        "360Safe",
+        "360se",
+        "360zip",
+        "360Desktop",
+        "360AlbumViewer",
+        "360AI图片",
+        "Safe360Ext",
+        "SoftMgrExt",
+        "AblumViewer",
+        "shell360ext",
+        "360软件管家",
+        "360安全卫士",
+        "360压缩",
+        "360浏览器"
+      ],
+      "knownBadComponents": [
+        "Safe360Ext",
+        "SoftMgrExt",
+        "AblumViewerMenuExt",
+        "ShellExt64.dll",
+        "shell360ext64.dll"
+      ]
+    },
+    {
+      "id": "kingsoft-wps",
+      "name": "WPS / 金山",
+      "snark": "文档软件顺手也想接管图片、云文档和右键。",
+      "riskBoost": 18,
+      "patterns": [
+        "WPS",
+        "Kingsoft",
+        "金山",
+        "Zhuhai Kingsoft",
+        "kwps",
+        "qingshell",
+        "qingnse",
+        "kdesktop",
+        "photolaunch",
+        "wpscloud",
+        "WpsDrive",
+        "WPS.PIC",
+        "QingNseContextMenu",
+        "kwpsshellext",
+        "qingshellext"
+      ],
+      "knownBadComponents": [
+        "kwpsshellext",
+        "qingshellext",
+        "QingNseContextMenu",
+        "kdesktopshellext",
+        "qkdesktopshellext",
+        "WPS.PIC",
+        "photolaunch.exe"
+      ]
+    },
+    {
+      "id": "baidu",
+      "name": "百度 / 百度网盘",
+      "snark": "网盘不只同步文件，还喜欢同步到右键菜单。",
+      "riskBoost": 18,
+      "patterns": [
+        "Baidu",
+        "百度",
+        "BaiduNetdisk",
+        "YunShell",
+        "BaiduYun",
+        "BaiduNetdiskImageViewer",
+        "cloudpic",
+        "YunDetectService",
+        "北京度友"
+      ],
+      "knownBadComponents": [
+        "YunShellExt",
+        "YunShellExplorerCommand",
+        "BaiduNetdiskImageViewer",
+        "cloudpic.dll",
+        "imageviewer"
+      ]
+    },
+    {
+      "id": "sogou",
+      "name": "搜狗",
+      "snark": "输入法可以输入字，但没必要输入到开机项里。",
+      "riskBoost": 16,
+      "patterns": [
+        "Sogou",
+        "搜狗",
+        "SogouInput",
+        "SogouPY",
+        "SogouExplorer",
+        "SogouCloud",
+        "SogouIme"
+      ],
+      "knownBadComponents": [
+        "SogouImeBroker",
+        "SogouInput",
+        "SogouExplorer"
+      ]
+    },
+    {
+      "id": "xunlei",
+      "name": "迅雷",
+      "snark": "下载器最爱给自己安排开机打卡。",
+      "riskBoost": 20,
+      "patterns": [
+        "Xunlei",
+        "Thunder",
+        "迅雷",
+        "Thunder Network",
+        "XLService",
+        "ThunderPlatform",
+        "XLB",
+        "BrowserEngine"
+      ],
+      "knownBadComponents": [
+        "XLService",
+        "ThunderPlatform",
+        "Xunlei.XLB",
+        "ThunderBrowser"
+      ]
+    },
+    {
+      "id": "tencent",
+      "name": "腾讯系",
+      "snark": "聊天归聊天，别顺手接管浏览器和启动项。",
+      "riskBoost": 12,
+      "patterns": [
+        "腾讯",
+        "QQBrowser",
+        "QQPCMgr",
+        "TIM.exe",
+        "TIM\\",
+        "QQProtect",
+        "电脑管家"
+      ],
+      "knownBadComponents": [
+        "QQPCMgr",
+        "QQBrowser",
+        "QQProtect"
+      ]
+    },
+    {
+      "id": "2345",
+      "name": "2345 系列",
+      "snark": "名字像门牌号，行为像钉子户。",
+      "riskBoost": 25,
+      "patterns": [
+        "2345",
+        "2345Explorer",
+        "2345Soft",
+        "2345Pic",
+        "2345Zip",
+        "王牌"
+      ],
+      "knownBadComponents": [
+        "2345Explorer",
+        "2345Soft",
+        "2345Pic",
+        "2345Zip"
+      ]
+    },
+    {
+      "id": "driver-tools",
+      "name": "驱动工具",
+      "snark": "修驱动可以，常驻当监工就过分了。",
+      "riskBoost": 18,
+      "patterns": [
+        "DriverGenius",
+        "DriverLife",
+        "驱动精灵",
+        "驱动人生",
+        "LuDaShi",
+        "鲁大师",
+        "MasterLu"
+      ],
+      "knownBadComponents": [
+        "DriverGenius",
+        "DriverLife",
+        "LuDaShi",
+        "MasterLu"
+      ]
+    },
+    {
+      "id": "compression-bundle",
+      "name": "国产压缩工具",
+      "snark": "压缩包还没打开，右键先被挤爆了。",
+      "riskBoost": 12,
+      "patterns": [
+        "KuaiZip",
+        "快压",
+        "HaoZip",
+        "好压",
+        "2345Zip",
+        "360压缩"
+      ],
+      "knownBadComponents": [
+        "KuaiZip",
+        "HaoZip",
+        "2345Zip",
+        "360zip"
+      ]
+    },
+    {
+      "id": "domestic-media",
+      "name": "国产影音工具",
+      "snark": "看个视频而已，不需要抢所有文件关联。",
+      "riskBoost": 10,
+      "patterns": [
+        "iQIYI",
+        "爱奇艺",
+        "Youku",
+        "优酷",
+        "Kugou",
+        "酷狗",
+        "Kuwo",
+        "酷我",
+        "PPTV",
+        "暴风"
+      ],
+      "knownBadComponents": [
+        "iQIYI",
+        "Youku",
+        "Kugou",
+        "PPTV"
+      ]
+    }
+  ]
+}

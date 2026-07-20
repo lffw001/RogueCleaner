@@ -1,0 +1,56 @@
+{
+  "riskWeights": {
+    "knownVendor": 35,
+    "knownBadComponent": 30,
+    "contextMenu": 18,
+    "startup": 28,
+    "scheduledTask": 30,
+    "service": 42,
+    "browserExtension": 35,
+    "fileAssociation": 22,
+    "uninstallResidue": 20,
+    "missingTarget": 18,
+    "unsignedTarget": 20,
+    "userWritablePath": 14,
+    "programDataPath": 10,
+    "tempPath": 22,
+    "randomLookingName": 10,
+    "trustedPublisher": -45,
+    "microsoftPublisher": -55
+  },
+  "riskBands": {
+    "low": 30,
+    "medium": 55,
+    "high": 80
+  },
+  "pathHints": {
+    "userWritable": [
+      "\\Users\\",
+      "\\AppData\\Local\\",
+      "\\AppData\\Roaming\\"
+    ],
+    "programData": [
+      "\\ProgramData\\"
+    ],
+    "temp": [
+      "\\Temp\\",
+      "\\Windows\\Temp\\"
+    ],
+    "trustedWindows": [
+      "\\Windows\\System32\\",
+      "\\Windows\\SysWOW64\\",
+      "\\Program Files\\WindowsApps\\Microsoft."
+    ]
+  },
+  "defaultActions": {
+    "ContextMenu": "DeleteRegistryKey",
+    "StartupRegistry": "DeleteRegistryValue",
+    "StartupFolder": "MoveFileToBackup",
+    "ScheduledTask": "DisableScheduledTask",
+    "Service": "DisableService",
+    "BrowserExtension": "DeleteRegistryKey",
+    "FileAssociation": "DeleteRegistryKey",
+    "UninstallResidue": "ReportOnly",
+    "AppxContextMenu": "ReportOnly"
+  }
+}

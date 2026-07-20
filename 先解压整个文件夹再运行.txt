@@ -1,0 +1,13 @@
+请先完整解压整个文件夹，再运行“流氓软件克星.exe”。
+
+不要在 WinRAR、压缩包预览窗口、浏览器下载面板里直接双击 exe。
+不要只把“流氓软件克星.exe”单独拖出来运行。
+
+透明发布版为了方便审查和降低误报，exe 旁边必须保留这些文件：
+
+- RogueCleaner.ps1
+- rules\vendors.json
+- rules\locations.json
+- rules\behaviors.json
+
+如果只运行单独的 exe，程序会提示缺少文件。
