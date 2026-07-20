@@ -52,9 +52,14 @@ namespace RogueCleanerV2
             store.Ensure();
             Logger.Initialize(store);
             bool smoke = HasArg(args, "--scan-smoke");
+            bool acceptance = HasArg(args, "--acceptance-test");
 
             try
             {
+                if (acceptance)
+                {
+                    return ValidationRunner.Run(store);
+                }
                 if (smoke)
                 {
                     List<Finding> findings = new ScannerEngine().ScanAll(null);
@@ -273,11 +278,11 @@ namespace RogueCleanerV2
 
         private static readonly VendorRule[] Vendors = new VendorRule[]
         {
-            new VendorRule { Name = "360 系列", Snark = "右键桌面不够，还想住进开机启动。", Boost = 25, Patterns = new [] { "Qihoo", "Qihu", "奇虎", "360.cn", "360Safe", "360se", "360zip", "360Desktop", "360AlbumViewer", "360AI图片", "Safe360Ext", "SoftMgrExt", "AblumViewer", "shell360ext", "360软件管家", "360安全卫士", "360压缩", "360浏览器" }, BadComponents = new [] { "Safe360Ext", "SoftMgrExt", "AblumViewerMenuExt", "ShellExt64.dll", "shell360ext64.dll" } },
-            new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "QingNseContextMenu", "kwpsshellext", "qingshellext" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "photolaunch.exe" } },
-            new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "YunShell", "BaiduYun", "BaiduNetdiskImageViewer", "cloudpic", "YunDetectService", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "cloudpic.dll", "imageviewer" } },
-            new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer" } },
-            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "ThunderPlatform", "XLB", "BrowserEngine" }, BadComponents = new [] { "XLService", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser" } },
+            new VendorRule { Name = "360 系列", Snark = "右键桌面不够，还想住进开机启动。", Boost = 25, Patterns = new [] { "Qihoo", "Qihu", "奇虎", "360.cn", "360Safe", "360se", "360zip", "360Desktop", "360AlbumViewer", "360AI图片", "360AI", "360Pic", "360KanPic", "360Image", "Safe360Ext", "SoftMgrExt", "AblumViewer", "AlbumViewer", "shell360ext", "360软件管家", "360安全卫士", "360压缩", "360浏览器", "360看图" }, BadComponents = new [] { "Safe360Ext", "SoftMgrExt", "AblumViewerMenuExt", "AlbumViewerMenuExt", "ShellExt64.dll", "shell360ext64.dll", "360AI图片" } },
+            new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "旺仔", "Wangzai", "kdocs" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai" } },
+            new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "BaiduNetdiskUnite", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskDesktopSync", "YunShell", "BaiduYun", "cloudpic", "YunDetectService", "BaiduYunDetect", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "cloudpic.dll", "imageviewer" } },
+            new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouFlash", "SogouTips", "SogouNews", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop" } },
+            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "ThunderPlatform", "XLB", "BrowserEngine", "ThunderStart", "XLLiveUD", "XLGameBox", "ThunderBrowser" }, BadComponents = new [] { "XLService", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart" } },
             new VendorRule { Name = "腾讯系", Snark = "聊天归聊天，别顺手接管浏览器和启动项。", Boost = 12, Patterns = new [] { "腾讯", "QQBrowser", "QQPCMgr", "TIM.exe", "TIM\\", "QQProtect", "电脑管家" }, BadComponents = new [] { "QQPCMgr", "QQBrowser", "QQProtect" } },
             new VendorRule { Name = "2345 系列", Snark = "名字像门牌号，行为像钉子户。", Boost = 25, Patterns = new [] { "2345", "2345Explorer", "2345Soft", "2345Pic", "2345Zip", "王牌" }, BadComponents = new [] { "2345Explorer", "2345Soft", "2345Pic", "2345Zip" } },
             new VendorRule { Name = "驱动工具", Snark = "修驱动可以，常驻当监工就过分了。", Boost = 18, Patterns = new [] { "DriverGenius", "DriverLife", "驱动精灵", "驱动人生", "LuDaShi", "鲁大师", "MasterLu" }, BadComponents = new [] { "DriverGenius", "DriverLife", "LuDaShi", "MasterLu" } },
@@ -1148,6 +1153,462 @@ namespace RogueCleanerV2
         {
             foreach (char c in Path.GetInvalidFileNameChars()) value = value.Replace(c, '_');
             return value.Replace('\\', '_').Replace('/', '_').Replace(':', '_');
+        }
+    }
+
+    internal sealed class ValidationReport
+    {
+        public string StartedAt { get; set; }
+        public string CompletedAt { get; set; }
+        public string ExecutableDirectory { get; set; }
+        public bool IsAdministrator { get; set; }
+        public bool AllRunnableCasesPassed { get; set; }
+        public bool HasAdminSkippedCases { get; set; }
+        public string Summary { get; set; }
+        public List<ValidationCaseResult> Cases { get; set; }
+    }
+
+    internal sealed class ValidationCaseResult
+    {
+        public string Name { get; set; }
+        public string Vendor { get; set; }
+        public string Area { get; set; }
+        public string Needle { get; set; }
+        public bool RequiresAdmin { get; set; }
+        public bool SetupSucceeded { get; set; }
+        public string SetupMessage { get; set; }
+        public bool DetectedBeforeClean { get; set; }
+        public bool CleanVerified { get; set; }
+        public bool RestoreVerified { get; set; }
+        public string CleanupStatus { get; set; }
+        public string Result { get; set; }
+        public string Message { get; set; }
+    }
+
+    internal sealed class ValidationCase
+    {
+        public string Name;
+        public string Vendor;
+        public string Area;
+        public string Needle;
+        public bool RequiresAdmin;
+        public bool SetupSucceeded;
+        public string SetupMessage;
+        public Action Create;
+        public Func<bool> Exists;
+        public Func<bool> Cleaned;
+        public Func<bool> Restored;
+    }
+
+    internal static class ValidationRunner
+    {
+        private const string Marker = "CodexRogueCleanerTest";
+        private const string TaskName = "\\CodexRogueCleanerTest_360Safe_Task";
+        private const string ServiceName = "CodexRogueCleanerTest360Svc";
+        private static readonly string[] TestKeys = new string[]
+        {
+            @"Software\Classes\Directory\Background\shell\CodexRogueCleanerTest_360Safe_RightMenu",
+            @"Software\Classes\*\shell\CodexRogueCleanerTest_WPSPic_RightMenu",
+            @"Software\Classes\Drive\shell\CodexRogueCleanerTest_kdesktop_WPSDisk",
+            @"Software\Google\Chrome\NativeMessagingHosts\com.codex.roguecleaner.BaiduNetdiskImageViewer"
+        };
+
+        public static int Run(DataStore store)
+        {
+            ValidationReport report = new ValidationReport();
+            report.StartedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            report.ExecutableDirectory = Path.GetDirectoryName(Application.ExecutablePath);
+            report.IsAdministrator = AdminUtil.IsAdministrator();
+            List<ValidationCase> testCases = BuildCases(report.IsAdministrator);
+            report.Cases = new List<ValidationCaseResult>();
+
+            try
+            {
+                CleanupArtifacts(report.IsAdministrator);
+                foreach (ValidationCase testCase in testCases)
+                {
+                    if (testCase.RequiresAdmin && !report.IsAdministrator)
+                    {
+                        testCase.SetupSucceeded = false;
+                        testCase.SetupMessage = "需要管理员权限，当前未创建模拟工件。";
+                        continue;
+                    }
+                    try
+                    {
+                        testCase.Create();
+                        testCase.SetupSucceeded = testCase.Exists();
+                        testCase.SetupMessage = testCase.SetupSucceeded ? "模拟工件创建成功。" : "创建命令返回后未回读到模拟工件。";
+                    }
+                    catch (Exception ex)
+                    {
+                        testCase.SetupSucceeded = false;
+                        testCase.SetupMessage = ex.GetType().Name + ": " + ex.Message;
+                    }
+                }
+
+                List<Finding> findings = new ScannerEngine().ScanAll(null);
+                List<Finding> matched = findings
+                    .Where(delegate(Finding f) { return ContainsTestMarker(f); })
+                    .ToList();
+                foreach (Finding finding in matched)
+                {
+                    finding.Selected = finding.CanClean;
+                }
+
+                CleanerEngine cleaner = new CleanerEngine(store);
+                CleanupBatch batch = cleaner.Clean(matched);
+                List<Finding> afterClean = new ScannerEngine().ScanAll(null);
+                cleaner.RestoreBatch(batch);
+                List<Finding> afterRestore = new ScannerEngine().ScanAll(null);
+
+                foreach (ValidationCase testCase in testCases)
+                {
+                    ValidationCaseResult result = BuildCaseResult(testCase);
+                    if (testCase.RequiresAdmin && !report.IsAdministrator)
+                    {
+                        result.Result = "Skipped";
+                        result.Message = "需要管理员权限创建和禁用模拟服务，本次非管理员运行，未执行。";
+                        report.HasAdminSkippedCases = true;
+                    }
+                    else if (!testCase.SetupSucceeded)
+                    {
+                        result.Result = "SetupFailed";
+                        result.Message = "模拟工件创建失败，未进入清理验证：" + testCase.SetupMessage;
+                    }
+                    else
+                    {
+                        result.DetectedBeforeClean = matched.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
+                        CleanupResult cleanup = batch.Results.FirstOrDefault(delegate(CleanupResult r) { return Contains(r, testCase.Needle); });
+                        result.CleanupStatus = cleanup == null ? "MissingCleanupResult" : cleanup.Status + ": " + cleanup.Message;
+                        result.CleanVerified = testCase.Cleaned();
+                        result.RestoreVerified = testCase.Restored();
+                        bool absentAfterCleanScan = !afterClean.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
+                        bool presentAfterRestoreScan = afterRestore.Any(delegate(Finding f) { return Contains(f, testCase.Needle); });
+                        bool pass = result.DetectedBeforeClean && result.CleanVerified && result.RestoreVerified && absentAfterCleanScan && presentAfterRestoreScan;
+                        result.Result = pass ? "Pass" : "Fail";
+                        result.Message = pass
+                            ? "扫描命中、清理后回读消失、恢复后回读出现。"
+                            : "验收失败：Detected=" + result.DetectedBeforeClean + ", Cleaned=" + result.CleanVerified + ", Restored=" + result.RestoreVerified + ", ScanAbsentAfterClean=" + absentAfterCleanScan + ", ScanPresentAfterRestore=" + presentAfterRestoreScan;
+                    }
+                    report.Cases.Add(result);
+                }
+
+                report.AllRunnableCasesPassed = report.Cases.All(delegate(ValidationCaseResult c) { return c.Result == "Pass" || c.Result == "Skipped"; });
+                report.Summary = "RunnableCases=" + report.Cases.Count(delegate(ValidationCaseResult c) { return c.Result != "Skipped"; }) +
+                    ", Passed=" + report.Cases.Count(delegate(ValidationCaseResult c) { return c.Result == "Pass"; }) +
+                    ", Failed=" + report.Cases.Count(delegate(ValidationCaseResult c) { return c.Result == "Fail"; }) +
+                    ", SetupFailed=" + report.Cases.Count(delegate(ValidationCaseResult c) { return c.Result == "SetupFailed"; }) +
+                    ", Skipped=" + report.Cases.Count(delegate(ValidationCaseResult c) { return c.Result == "Skipped"; });
+                return report.Cases.Any(delegate(ValidationCaseResult c) { return c.Result == "Fail" || c.Result == "SetupFailed"; }) ? 1 : (report.HasAdminSkippedCases ? 2 : 0);
+            }
+            catch (Exception ex)
+            {
+                report.AllRunnableCasesPassed = false;
+                report.Summary = "验收异常：" + ex.Message;
+                Logger.Error("自动验收失败", ex);
+                return 1;
+            }
+            finally
+            {
+                report.CompletedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                string path = Path.Combine(store.Reports, "acceptance-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json");
+                CleanerEngine.WriteJson(path, report);
+                CleanupArtifacts(report.IsAdministrator);
+            }
+        }
+
+        private static List<ValidationCase> BuildCases(bool isAdmin)
+        {
+            List<ValidationCase> cases = new List<ValidationCase>();
+            cases.Add(new ValidationCase
+            {
+                Name = "普通文件夹空白处右键：使用360测试右键菜单",
+                Vendor = "360 系列",
+                Area = "右键菜单",
+                Needle = "CodexRogueCleanerTest_360Safe_RightMenu",
+                Create = delegate { CreateRegistryKey(TestKeys[0], "使用360测试右键菜单", @"cmd.exe /c exit 0"); },
+                Exists = delegate { return RegistryKeyExists(TestKeys[0]); },
+                Cleaned = delegate { return !RegistryKeyExists(TestKeys[0]); },
+                Restored = delegate { return RegistryKeyExists(TestKeys[0]); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "普通文件右键：WPS 图片测试右键菜单",
+                Vendor = "WPS / 金山",
+                Area = "右键菜单",
+                Needle = "CodexRogueCleanerTest_WPSPic_RightMenu",
+                Create = delegate { CreateRegistryKey(TestKeys[1], "WPS图片测试右键菜单", @"cmd.exe /c exit 0"); },
+                Exists = delegate { return RegistryKeyExists(TestKeys[1]); },
+                Cleaned = delegate { return !RegistryKeyExists(TestKeys[1]); },
+                Restored = delegate { return RegistryKeyExists(TestKeys[1]); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "磁盘盘符右键：WPS 云盘/磁盘入口测试",
+                Vendor = "WPS / 金山",
+                Area = "右键菜单",
+                Needle = "CodexRogueCleanerTest_kdesktop_WPSDisk",
+                Create = delegate { CreateRegistryKey(TestKeys[2], "WPS云盘/磁盘入口测试", @"cmd.exe /c exit 0"); },
+                Exists = delegate { return RegistryKeyExists(TestKeys[2]); },
+                Cleaned = delegate { return !RegistryKeyExists(TestKeys[2]); },
+                Restored = delegate { return RegistryKeyExists(TestKeys[2]); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "开机启动：搜狗弹窗测试项",
+                Vendor = "搜狗",
+                Area = "开机启动",
+                Needle = "CodexRogueCleanerTest_SogouInputPop",
+                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop", @"C:\CodexRogueCleanerTest\SogouInputPop.exe"); },
+                Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); },
+                Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); },
+                Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "开机启动：迅雷自启测试项",
+                Vendor = "迅雷",
+                Area = "开机启动",
+                Needle = "CodexRogueCleanerTest_ThunderStart",
+                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart", @"C:\CodexRogueCleanerTest\ThunderStart.exe"); },
+                Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); },
+                Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); },
+                Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "浏览器插件/外部宿主：百度网盘看图测试项",
+                Vendor = "百度 / 百度网盘",
+                Area = "浏览器插件/外部宿主",
+                Needle = "BaiduNetdiskImageViewer",
+                Create = delegate { CreateNativeHostKey(TestKeys[3]); },
+                Exists = delegate { return RegistryKeyExists(TestKeys[3]); },
+                Cleaned = delegate { return !RegistryKeyExists(TestKeys[3]); },
+                Restored = delegate { return RegistryKeyExists(TestKeys[3]); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = ".png 打开方式：百度网盘看图测试项",
+                Vendor = "百度 / 百度网盘",
+                Area = "文件关联/打开方式",
+                Needle = "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open",
+                Create = delegate { SetRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open", string.Empty); },
+                Exists = delegate { return RegistryValueExists(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"); },
+                Cleaned = delegate { return !RegistryValueExists(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"); },
+                Restored = delegate { return RegistryValueExists(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"); }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "计划任务：360 定时拉起测试项",
+                Vendor = "360 系列",
+                Area = "计划任务/定时拉起",
+                Needle = "CodexRogueCleanerTest_360Safe_Task",
+                Create = delegate { CreateScheduledTask(); },
+                Exists = delegate { bool enabled; return TryGetScheduledTaskEnabled(TaskName, out enabled); },
+                Cleaned = delegate { bool enabled; return TryGetScheduledTaskEnabled(TaskName, out enabled) && !enabled; },
+                Restored = delegate { bool enabled; return TryGetScheduledTaskEnabled(TaskName, out enabled) && enabled; }
+            });
+            cases.Add(new ValidationCase
+            {
+                Name = "后台服务：360 服务测试项",
+                Vendor = "360 系列",
+                Area = "后台服务",
+                Needle = ServiceName,
+                RequiresAdmin = true,
+                Create = delegate { CreateService(); },
+                Exists = delegate { return ServiceExists(ServiceName); },
+                Cleaned = delegate { return ServiceStartMode(ServiceName).Equals("Disabled", StringComparison.OrdinalIgnoreCase); },
+                Restored = delegate { return ServiceStartMode(ServiceName).Equals("Manual", StringComparison.OrdinalIgnoreCase); }
+            });
+            return cases;
+        }
+
+        private static ValidationCaseResult BuildCaseResult(ValidationCase testCase)
+        {
+            return new ValidationCaseResult
+            {
+                Name = testCase.Name,
+                Vendor = testCase.Vendor,
+                Area = testCase.Area,
+                Needle = testCase.Needle,
+                RequiresAdmin = testCase.RequiresAdmin,
+                SetupSucceeded = testCase.SetupSucceeded,
+                SetupMessage = testCase.SetupMessage,
+                Result = "Pending"
+            };
+        }
+
+        private static void CleanupArtifacts(bool includeService)
+        {
+            foreach (string key in TestKeys) DeleteRegistryKey(key);
+            DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop");
+            DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart");
+            DeleteRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open");
+            RunProcess("schtasks.exe", "/Delete /TN \"" + TaskName + "\" /F");
+            if (includeService) RunProcess("sc.exe", "delete \"" + ServiceName + "\"");
+        }
+
+        private static bool ContainsTestMarker(Finding finding)
+        {
+            return Contains(finding, Marker) ||
+                Contains(finding, "BaiduNetdiskImageViewer") ||
+                Contains(finding, "SogouInputPop") ||
+                Contains(finding, "ThunderStart");
+        }
+
+        private static bool Contains(Finding finding, string value)
+        {
+            if (finding == null) return false;
+            string text = string.Join(" ", new string[] { finding.UserVisibleName, finding.UserImpact, finding.TechnicalLocation, finding.Evidence, finding.ActionKind });
+            return text.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool Contains(CleanupResult result, string value)
+        {
+            if (result == null) return false;
+            string text = string.Join(" ", new string[] { result.Title, result.Category, result.TechnicalLocation, result.Message, result.ActionKind });
+            if (result.Target != null) text = text + " " + result.Target.SubKey + " " + result.Target.ValueName + " " + result.Target.TaskName + " " + result.Target.ServiceName;
+            return text.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void CreateRegistryKey(string keyPath, string title, string command)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+            {
+                key.SetValue("", title);
+                key.SetValue("MUIVerb", title);
+                key.SetValue("CodexMarker", Marker);
+            }
+            using (RegistryKey commandKey = Registry.CurrentUser.CreateSubKey(keyPath + "\\command"))
+            {
+                commandKey.SetValue("", command);
+            }
+        }
+
+        private static void CreateNativeHostKey(string keyPath)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+            {
+                key.SetValue("", @"C:\CodexRogueCleanerTest\BaiduNetdiskImageViewer.json");
+                key.SetValue("Description", Marker + " BaiduNetdiskImageViewer");
+            }
+        }
+
+        private static void SetRegistryValue(string keyPath, string name, string value)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+            {
+                key.SetValue(name, value ?? string.Empty);
+            }
+        }
+
+        private static void DeleteRegistryKey(string keyPath)
+        {
+            try { Registry.CurrentUser.DeleteSubKeyTree(keyPath, false); } catch { }
+        }
+
+        private static void DeleteRegistryValue(string keyPath, string name)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(keyPath, true))
+                {
+                    if (key != null) key.DeleteValue(name, false);
+                }
+            }
+            catch { }
+        }
+
+        private static bool RegistryKeyExists(string keyPath)
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(keyPath, false))
+            {
+                return key != null;
+            }
+        }
+
+        private static bool RegistryValueExists(string keyPath, string name)
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(keyPath, false))
+            {
+                return key != null && key.GetValueNames().Any(delegate(string n) { return string.Equals(n, name, StringComparison.OrdinalIgnoreCase); });
+            }
+        }
+
+        private static void CreateScheduledTask()
+        {
+            string time = DateTime.Now.AddMinutes(10).ToString("HH:mm");
+            RunProcess("schtasks.exe", "/Create /SC DAILY /ST " + time + " /TN \"" + TaskName + "\" /TR \"cmd.exe /c exit 0\" /F");
+        }
+
+        private static void CreateService()
+        {
+            RunProcess("sc.exe", "create \"" + ServiceName + "\" binPath= \"cmd.exe /c exit 0\" DisplayName= \"360Safe CodexRogueCleanerTest Service\" start= demand");
+        }
+
+        private static bool ServiceExists(string serviceName)
+        {
+            return !string.Equals(ServiceStartMode(serviceName), "Missing", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ServiceStartMode(string serviceName)
+        {
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name,StartMode FROM Win32_Service WHERE Name='" + serviceName.Replace("'", "''") + "'"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        return Convert.ToString(obj["StartMode"]);
+                    }
+                }
+            }
+            catch { }
+            return "Missing";
+        }
+
+        private static bool TryGetScheduledTaskEnabled(string taskName, out bool enabled)
+        {
+            enabled = false;
+            try
+            {
+                string normalized = taskName.StartsWith("\\", StringComparison.Ordinal) ? taskName : "\\" + taskName;
+                int slash = normalized.LastIndexOf('\\');
+                string folderPath = slash <= 0 ? "\\" : normalized.Substring(0, slash);
+                string name = normalized.Substring(slash + 1);
+                Type serviceType = Type.GetTypeFromProgID("Schedule.Service");
+                if (serviceType == null) return false;
+                dynamic service = Activator.CreateInstance(serviceType);
+                service.Connect();
+                dynamic folder = service.GetFolder(folderPath);
+                dynamic task = folder.GetTask(name);
+                enabled = Convert.ToBoolean(task.Enabled);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static int RunProcess(string file, string args)
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo(file, args);
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+                using (Process process = Process.Start(psi))
+                {
+                    process.WaitForExit(60000);
+                    return process.ExitCode;
+                }
+            }
+            catch
+            {
+                return -1;
+            }
         }
     }
 
