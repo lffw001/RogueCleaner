@@ -4,7 +4,7 @@
 
 ## 结论
 
-当前 v2 单文件核心验收已通过。
+当前 v2.0.1 单文件核心验收已通过。
 
 已验证：
 
@@ -47,7 +47,7 @@
 独立运行目录：
 
 ```text
-D:\Codex\Workspace\RogueCleanerAcceptanceLab-20260720-233735
+D:\Codex\Workspace\RogueCleanerAcceptanceLab-20260720-234000
 ```
 
 验收摘要：

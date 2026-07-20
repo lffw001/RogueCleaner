@@ -23,15 +23,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion("2.0.0.0")]
+[assembly: AssemblyVersion("2.0.1.0")]
+[assembly: AssemblyFileVersion("2.0.1.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.0";
+        public const string Version = "2.0.1";
         public const string Repository = "https://github.com/aakk007/RogueCleaner";
         public const string ReleasesUrl = "https://github.com/aakk007/RogueCleaner/releases";
         public const string LatestApiUrl = "https://api.github.com/repos/aakk007/RogueCleaner/releases/latest";
