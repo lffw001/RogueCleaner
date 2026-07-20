@@ -278,16 +278,24 @@ namespace RogueCleanerV2
 
         private static readonly VendorRule[] Vendors = new VendorRule[]
         {
-            new VendorRule { Name = "360 系列", Snark = "右键桌面不够，还想住进开机启动。", Boost = 25, Patterns = new [] { "Qihoo", "Qihu", "奇虎", "360.cn", "360Safe", "360se", "360zip", "360Desktop", "360AlbumViewer", "360AI图片", "360AI", "360Pic", "360KanPic", "360Image", "Safe360Ext", "SoftMgrExt", "AblumViewer", "AlbumViewer", "shell360ext", "360软件管家", "360安全卫士", "360压缩", "360浏览器", "360看图" }, BadComponents = new [] { "Safe360Ext", "SoftMgrExt", "AblumViewerMenuExt", "AlbumViewerMenuExt", "ShellExt64.dll", "shell360ext64.dll", "360AI图片" } },
-            new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "旺仔", "Wangzai", "kdocs" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai" } },
-            new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "BaiduNetdiskUnite", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskDesktopSync", "YunShell", "BaiduYun", "cloudpic", "YunDetectService", "BaiduYunDetect", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "cloudpic.dll", "imageviewer" } },
-            new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouFlash", "SogouTips", "SogouNews", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop" } },
-            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "ThunderPlatform", "XLB", "BrowserEngine", "ThunderStart", "XLLiveUD", "XLGameBox", "ThunderBrowser" }, BadComponents = new [] { "XLService", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart" } },
-            new VendorRule { Name = "腾讯系", Snark = "聊天归聊天，别顺手接管浏览器和启动项。", Boost = 12, Patterns = new [] { "腾讯", "QQBrowser", "QQPCMgr", "TIM.exe", "TIM\\", "QQProtect", "电脑管家" }, BadComponents = new [] { "QQPCMgr", "QQBrowser", "QQProtect" } },
-            new VendorRule { Name = "2345 系列", Snark = "名字像门牌号，行为像钉子户。", Boost = 25, Patterns = new [] { "2345", "2345Explorer", "2345Soft", "2345Pic", "2345Zip", "王牌" }, BadComponents = new [] { "2345Explorer", "2345Soft", "2345Pic", "2345Zip" } },
-            new VendorRule { Name = "驱动工具", Snark = "修驱动可以，常驻当监工就过分了。", Boost = 18, Patterns = new [] { "DriverGenius", "DriverLife", "驱动精灵", "驱动人生", "LuDaShi", "鲁大师", "MasterLu" }, BadComponents = new [] { "DriverGenius", "DriverLife", "LuDaShi", "MasterLu" } },
-            new VendorRule { Name = "国产压缩工具", Snark = "压缩包还没打开，右键先被挤爆了。", Boost = 12, Patterns = new [] { "KuaiZip", "快压", "HaoZip", "好压", "2345Zip", "360压缩" }, BadComponents = new [] { "KuaiZip", "HaoZip", "2345Zip", "360zip" } },
-            new VendorRule { Name = "国产影音工具", Snark = "看个视频而已，不需要抢所有文件关联。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风" }, BadComponents = new [] { "iQIYI", "Youku", "Kugou", "PPTV" } }
+            new VendorRule { Name = "360 系列", Snark = "右键桌面不够，还想住进开机启动。", Boost = 25, Patterns = new [] { "Qihoo", "Qihu", "奇虎", "360.cn", "360Safe", "360sd", "360rp", "360se", "360Chrome", "360zip", "360Desktop", "360DesktopLite", "360Wallpaper", "360AlbumViewer", "360AI图片", "360AI", "360Pic", "360KanPic", "360Image", "Safe360Ext", "SoftMgrExt", "AblumViewer", "AlbumViewer", "shell360ext", "QHActiveDefense", "ZhuDongFangYu", "QHWatchdog", "QHProtected", "QHWebProtection", "QHSafeTray", "360软件管家", "360安全卫士", "360压缩", "360浏览器", "360极速浏览器", "360看图" }, BadComponents = new [] { "Safe360Ext", "SoftMgrExt", "AblumViewerMenuExt", "AlbumViewerMenuExt", "ShellExt64.dll", "shell360ext64.dll", "360AI图片", "QHActiveDefense", "ZhuDongFangYu" } },
+            new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "kdocs", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "kdesktopshellext", "qkdesktopshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "WPS灵犀", "wpsLingxi", "lingxi", "旺仔", "Wangzai", "wpscenter", "wpsupdate", "WpsUpdateTask", "WPS Office Cloud Service", "wpscloudsvr", "ksomisc" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai", "wpscloudsvr" } },
+            new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "BaiduNetdiskUnite", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskDesktopSync", "BaiduNetdiskSync", "BaiduNetdiskUtility", "BaiduNetdiskService", "BaiduNetdiskHost", "BaiduYun", "BaiduYunDetect", "YunShell", "YunShellExt", "YunDetectService", "cloudpic", "百度网盘看图", "百度网盘同步", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskUtility", "BaiduNetdiskService", "cloudpic.dll", "imageviewer" } },
+            new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouImeMgr", "SogouFlash", "SogouTips", "SogouNews", "SogouPopup", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd", "SogouUpdate", "SogouComMgr", "SGTool", "PinyinUp" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop", "SogouPopup", "SogouNews", "SGImeGuard" } },
+            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "XLServicePlatform", "ThunderPlatform", "ThunderAgent", "ThunderStart", "ThunderBrowser", "XunleiBHO", "XunleiDownload", "XunleiMedia", "XLB", "XLLiveUD", "XLGameBox", "XMP", "TBCrash", "BrowserEngine", "迅雷下载助手" }, BadComponents = new [] { "XLService", "XLServicePlatform", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart", "XunleiBHO" } },
+            new VendorRule { Name = "腾讯系", Snark = "聊天归聊天，别顺手接管浏览器和启动项。", Boost = 12, Patterns = new [] { "Tencent", "腾讯", "QQBrowser", "QQPCMgr", "QQPCMGR", "QQProtect", "QQPCRTP", "QQRepair", "QQShellExt", "TXShell", "TIM.exe", "TIM\\", "WeChat", "微信", "企业微信", "WXWork", "TencentDocs", "腾讯文档", "QQLive", "QQMusic", "TBS", "QBCore", "QBUpdate", "电脑管家" }, BadComponents = new [] { "QQPCMgr", "QQBrowser", "QQProtect", "QQPCRTP", "QQShellExt", "TXShell", "QBUpdate" } },
+            new VendorRule { Name = "2345 系列", Snark = "名字像门牌号，行为像钉子户。", Boost = 25, Patterns = new [] { "2345", "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345PicViewer", "2345Kantuwang", "2345Zip", "2345Safe", "2345Protect", "2345Svc", "2345MiniPage", "2345Browser", "2345看图王", "2345好压", "王牌" }, BadComponents = new [] { "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345Zip", "2345Protect", "2345MiniPage" } },
+            new VendorRule { Name = "猎豹 / 金山毒霸", Snark = "安全软件当然能安全，问题是别把自己藏成常驻钉子。", Boost = 18, Patterns = new [] { "Cheetah", "猎豹", "Liebao", "Kingsoft Internet Security", "金山毒霸", "KSafe", "KSafeSvc", "KWatch", "kismain", "kavsrv", "KAV", "KSafeTray", "KMailMon", "KSoft" }, BadComponents = new [] { "KSafeSvc", "KWatch", "kavsrv", "KSafeTray", "Cheetah" } },
+            new VendorRule { Name = "驱动/硬件检测工具", Snark = "修驱动可以，常驻当监工就过分了。", Boost = 18, Patterns = new [] { "DriverGenius", "DriverLife", "DriveTheLife", "驱动精灵", "驱动人生", "MyDrivers", "DrvMgr", "DGDaemon", "DTLService", "LuDaShi", "鲁大师", "MasterLu", "LdsLite", "LdsSvc", "LdsDaemon", "ComputerZ", "HardwareProtect" }, BadComponents = new [] { "DriverGenius", "DriverLife", "DriveTheLife", "LuDaShi", "MasterLu", "LdsSvc", "LdsDaemon" } },
+            new VendorRule { Name = "国产压缩/看图工具", Snark = "压缩包还没打开，右键先被挤爆了。", Boost = 12, Patterns = new [] { "KuaiZip", "快压", "Kuaizip", "HaoZip", "好压", "2345Zip", "360压缩", "360zip", "2345Pic", "2345看图王", "XnViewShell", "KanPic", "看图王", "极速看图", "JisuPic" }, BadComponents = new [] { "KuaiZip", "Kuaizip", "HaoZip", "2345Zip", "360zip", "2345Pic" } },
+            new VendorRule { Name = "国产浏览器/导航", Snark = "浏览器自己跑就行，别把下载、主页和启动项全包了。", Boost = 16, Patterns = new [] { "SogouExplorer", "搜狗高速浏览器", "QQBrowser", "360se", "360Chrome", "2345Explorer", "2345Browser", "Liebao", "猎豹浏览器", "CheetahBrowser", "Maxthon", "傲游", "UCBrowser", "UCBrowser", "TheWorld", "世界之窗", "BaiduBrowser", "百度浏览器" }, BadComponents = new [] { "SogouExplorer", "QQBrowser", "2345Explorer", "CheetahBrowser", "UCService", "BaiduBrowser" } },
+            new VendorRule { Name = "Flash 中国特供组件", Snark = "Flash 都退役了，助手还想在后台上班。", Boost = 22, Patterns = new [] { "FlashHelperService", "Flash Center", "FlashCenter", "Flash大厅", "FlashHelper", "FlashRepair", "FlashService", "flash.cn" }, BadComponents = new [] { "FlashHelperService", "FlashCenter", "FlashHelper" } },
+            new VendorRule { Name = "手机助手/设备助手", Snark = "连一次手机，后台服务倒是记住一辈子。", Boost = 12, Patterns = new [] { "i4Tools", "爱思助手", "Aisi", "PP助手", "PPAssistant", "91助手", "91Assistant", "Wandoujia", "豌豆荚", "BaiduMobile", "TencentMobileManager", "应用宝", "HiSuite", "华为手机助手", "MiPhoneAssistant", "小米助手" }, BadComponents = new [] { "i4Tools", "PPAssistant", "91Assistant", "Wandoujia", "TencentMobileManager" } },
+            new VendorRule { Name = "国产影音/游戏大厅", Snark = "看个视频玩个游戏，不需要抢文件关联和开机席位。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Qiyi", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风", "Baofeng", "QQLive", "TencentVideo", "腾讯视频", "XunleiMedia", "XMP", "Bilibili", "bili", "芒果TV", "MangoTV", "WeGame", "SteamChina" }, BadComponents = new [] { "iQIYI", "Qiyi", "Youku", "Kugou", "Kuwo", "PPTV", "Baofeng", "QQLive", "TencentVideo" } },
+            new VendorRule { Name = "PDF/办公捆绑工具", Snark = "读个 PDF，也别顺手接管全系统打开方式。", Boost = 10, Patterns = new [] { "JisuPDF", "极速PDF", "SwiftPDF", "迅捷PDF", "Foxit", "福昕", "CAJViewer", "CAJ", "PDFReader", "PDFSuite", "PDFMaster", "嗨格式", "HiFormat" }, BadComponents = new [] { "JisuPDF", "SwiftPDF", "PDFMaster", "HiFormat" } },
+            new VendorRule { Name = "预装管家/厂商助手", Snark = "出厂自带不等于可以偷偷常驻。", Boost = 8, Patterns = new [] { "LenovoUtility", "LenovoVantage", "联想电脑管家", "LenovoPcManager", "Huawei PC Manager", "华为电脑管家", "HonorPCManager", "荣耀电脑管家", "MiService", "小米电脑管家", "ASUS", "MyASUS", "AcerCare", "Dell SupportAssist" }, BadComponents = new [] { "LenovoPcManager", "Huawei PC Manager", "HonorPCManager", "MiService", "SupportAssist" } },
+            new VendorRule { Name = "弹窗广告/推广组件", Snark = "关掉没一会儿又弹，这类小广告最会装死。", Boost = 22, Patterns = new [] { "SogouNews", "SogouPopup", "SogouTips", "SogouAd", "SogouInputPop", "2345MiniPage", "MiniNews", "HotNews", "NewsPop", "PopNews", "PopWnd", "AdPop", "AdService", "AdPush", "WpsNotify", "KNotify", "BaiduTips", "BaiduNews", "QQBrowserMini", "KugouTips", "KuwoNews", "QiyiNews", "YoukuNews", "LuDaShiNews", "MasterLuMini", "DriverGeniusNews", "KuaiZipNews", "HaoZipMiniPage", "今日热点", "每日热点", "热点资讯", "迷你页", "推荐弹窗", "广告弹窗" }, BadComponents = new [] { "SogouNews", "SogouPopup", "2345MiniPage", "AdPop", "AdService", "WpsNotify", "BaiduTips", "LuDaShiNews", "KuaiZipNews" } },
+            new VendorRule { Name = "守护/自动恢复组件", Snark = "你关它一次，它守护进程能把自己续上三回。", Boost = 20, Patterns = new [] { "QHWatchdog", "QHProtected", "QHActiveDefense", "SGImeGuard", "SogouImeBroker", "XLServicePlatform", "ThunderPlatform", "BaiduYunDetect", "YunDetectService", "BaiduNetdiskUtility", "QQProtect", "QQPCRTP", "2345Protect", "2345Svc", "KSafeSvc", "KWatch", "LdsDaemon", "LdsSvc", "FlashHelperService", "FlashCenter", "DriverGeniusDaemon", "DTLService", "LuDaShiDaemon" }, BadComponents = new [] { "QHWatchdog", "QHProtected", "SGImeGuard", "XLServicePlatform", "BaiduYunDetect", "QQProtect", "2345Protect", "KSafeSvc", "LdsDaemon", "FlashHelperService" } }
         };
 
         public static string ResolveVendor(string text)
@@ -408,7 +416,17 @@ namespace RogueCleanerV2
             @"Software\Classes\DesktopBackground\shell",
             @"Software\Classes\DesktopBackground\shellex\ContextMenuHandlers",
             @"Software\Classes\lnkfile\shell",
-            @"Software\Classes\lnkfile\shellex\ContextMenuHandlers"
+            @"Software\Classes\lnkfile\shellex\ContextMenuHandlers",
+            @"Software\Classes\SystemFileAssociations\image\shell",
+            @"Software\Classes\SystemFileAssociations\image\shellex\ContextMenuHandlers",
+            @"Software\Classes\SystemFileAssociations\video\shell",
+            @"Software\Classes\SystemFileAssociations\video\shellex\ContextMenuHandlers",
+            @"Software\Classes\SystemFileAssociations\audio\shell",
+            @"Software\Classes\SystemFileAssociations\audio\shellex\ContextMenuHandlers",
+            @"Software\Classes\SystemFileAssociations\text\shell",
+            @"Software\Classes\SystemFileAssociations\text\shellex\ContextMenuHandlers",
+            @"Software\Classes\CompressedFolder\shell",
+            @"Software\Classes\CompressedFolder\shellex\ContextMenuHandlers"
         };
 
         private static readonly string[] StartupRoots = new string[]
@@ -423,10 +441,17 @@ namespace RogueCleanerV2
             @"Software\Microsoft\Edge\Extensions",
             @"Software\Google\Chrome\NativeMessagingHosts",
             @"Software\Microsoft\Edge\NativeMessagingHosts",
+            @"Software\Mozilla\NativeMessagingHosts",
             @"Software\Policies\Google\Chrome\ExtensionInstallForcelist",
             @"Software\Policies\Microsoft\Edge\ExtensionInstallForcelist",
             @"Software\Policies\Google\Chrome\ExtensionSettings",
             @"Software\Policies\Microsoft\Edge\ExtensionSettings"
+        };
+
+        private static readonly string[] InstalledRoots = new string[]
+        {
+            @"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+            @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
         };
 
         private static readonly string[] FileExtensions = new string[]
@@ -449,6 +474,8 @@ namespace RogueCleanerV2
             scanners.Add(delegate { AddRange(all, gate, sink, "浏览器插件", ScanBrowserExtensions()); });
             scanners.Add(delegate { AddRange(all, gate, sink, "文件关联", ScanFileAssociations()); });
             scanners.Add(delegate { AddRange(all, gate, sink, "计划任务", ScanScheduledTasks()); });
+            scanners.Add(delegate { AddRange(all, gate, sink, "隐藏卸载入口", ScanHiddenInstalledComponents()); });
+            scanners.Add(delegate { AddRange(all, gate, sink, "正在运行的弹窗/守护", ScanRunningAdAndGuardProcesses()); });
 
             List<Task> running = new List<Task>();
             foreach (Action scanner in scanners)
@@ -505,9 +532,13 @@ namespace RogueCleanerV2
                             string display = ReadString(child, "");
                             string mui = ReadString(child, "MUIVerb");
                             string explorerHandler = ReadString(child, "ExplorerCommandHandler");
+                            string commandStateHandler = ReadString(child, "CommandStateHandler");
+                            string icon = ReadString(child, "Icon");
+                            string appliesTo = ReadString(child, "AppliesTo");
                             string command = ReadDefault(target, "command");
-                            string title = Join(childName, display, mui, explorerHandler);
-                            string text = Join(title, command, target.SubKey);
+                            string clsidText = ResolveClsidRegistration(childName, display, explorerHandler, commandStateHandler);
+                            string title = Join(childName, display, mui, explorerHandler, commandStateHandler);
+                            string text = Join(title, command, icon, appliesTo, clsidText, target.SubKey);
                             if (!RuleCatalog.IsKnownVendor(text)) continue;
                             list.Add(NewFinding("右键菜单", title, DescribeContextMenu(target.SubKey, title), target, text, 18));
                         }
@@ -553,10 +584,11 @@ namespace RogueCleanerV2
                 if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) continue;
                 foreach (string file in Directory.GetFiles(folder))
                 {
-                    string text = file;
+                    string shortcut = ResolveShortcutText(file);
+                    string text = Join(file, shortcut);
                     if (!RuleCatalog.IsKnownVendor(text)) continue;
                     ActionTarget target = new ActionTarget { Kind = "MoveFileToBackup", FilePath = file };
-                    list.Add(NewFinding("启动文件夹", Path.GetFileName(file), "开机后会从启动文件夹拉起：" + Path.GetFileName(file), target, text, 28));
+                    list.Add(NewFinding("启动文件夹", Path.GetFileName(file), "开机后会从启动文件夹拉起：" + Join(Path.GetFileName(file), shortcut), target, text, 28));
                 }
             }
             return list;
@@ -590,6 +622,82 @@ namespace RogueCleanerV2
                         list.Add(NewFinding("浏览器插件/外部宿主", childName, "浏览器可能会加载这个外部扩展/宿主：" + childName, target, text, 35));
                     }
                 }
+            }
+            return list;
+        }
+
+        private List<Finding> ScanHiddenInstalledComponents()
+        {
+            List<Finding> list = new List<Finding>();
+            foreach (ActionTarget root in RegistryTargets(InstalledRoots, true, true))
+            {
+                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                {
+                    if (key == null) continue;
+                    foreach (string childName in SafeSubKeyNames(key))
+                    {
+                        ActionTarget target = CopyTarget(root);
+                        target.Kind = "ReportOnly";
+                        target.SubKey = root.SubKey + "\\" + childName;
+                        using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
+                        {
+                            if (child == null) continue;
+                            string display = ReadString(child, "DisplayName");
+                            string publisher = ReadString(child, "Publisher");
+                            string installLocation = ReadString(child, "InstallLocation");
+                            string displayIcon = ReadString(child, "DisplayIcon");
+                            string uninstall = ReadString(child, "UninstallString");
+                            string quietUninstall = ReadString(child, "QuietUninstallString");
+                            string systemComponent = ReadString(child, "SystemComponent");
+                            string noRemove = ReadString(child, "NoRemove");
+                            string parentKey = ReadString(child, "ParentKeyName");
+                            string releaseType = ReadString(child, "ReleaseType");
+                            string text = Join(childName, display, publisher, installLocation, displayIcon, uninstall, quietUninstall, systemComponent, noRemove, parentKey, releaseType, target.SubKey);
+                            if (!RuleCatalog.IsKnownVendor(text)) continue;
+                            bool hidden = IsTruthy(systemComponent) ||
+                                IsTruthy(noRemove) ||
+                                string.IsNullOrWhiteSpace(display) ||
+                                string.IsNullOrWhiteSpace(uninstall) ||
+                                !string.IsNullOrWhiteSpace(parentKey);
+                            if (!hidden) continue;
+                            string name = string.IsNullOrWhiteSpace(display) ? childName : display;
+                            string reason = HiddenInstallReason(display, uninstall, systemComponent, noRemove, parentKey);
+                            Finding finding = NewFinding("疑似捆绑组件/卸载入口异常", name, "安装列表可能不好找或没有正常卸载入口：" + reason + "。只提示，不一键卸载。", target, text, 5);
+                            finding.Risk = "低";
+                            list.Add(finding);
+                        }
+                    }
+                }
+            }
+            return list;
+        }
+
+        private List<Finding> ScanRunningAdAndGuardProcesses()
+        {
+            List<Finding> list = new List<Finding>();
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT ProcessId,Name,ExecutablePath,CommandLine FROM Win32_Process"))
+                {
+                    foreach (ManagementObject process in searcher.Get())
+                    {
+                        string pid = Convert.ToString(process["ProcessId"]);
+                        string name = Convert.ToString(process["Name"]);
+                        string path = Convert.ToString(process["ExecutablePath"]);
+                        string command = Convert.ToString(process["CommandLine"]);
+                        string text = Join(pid, name, path, command);
+                        if (!RuleCatalog.IsKnownVendor(text)) continue;
+                        if (!LooksLikeAdOrGuard(text)) continue;
+                        ActionTarget target = new ActionTarget { Kind = "ReportOnly", FilePath = Join(name, path, "PID=" + pid) };
+                        Finding finding = NewFinding("正在运行/疑似弹窗守护", name, "后台正在运行，像是弹窗、推广、守护或自动恢复组件：" + Join(name, path), target, text, 12);
+                        finding.Risk = "低";
+                        list.Add(finding);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("扫描运行进程失败", ex);
             }
             return list;
         }
@@ -789,6 +897,101 @@ namespace RogueCleanerV2
             }
         }
 
+        private static string ResolveClsidRegistration(params string[] values)
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (string value in values)
+            {
+                foreach (string clsid in ExtractClsids(value))
+                {
+                    string info = ReadClsidInfo(clsid);
+                    if (string.IsNullOrEmpty(info)) continue;
+                    if (sb.Length > 0) sb.Append(" ");
+                    sb.Append(info);
+                }
+            }
+            return sb.ToString();
+        }
+
+        private static IEnumerable<string> ExtractClsids(string value)
+        {
+            if (string.IsNullOrEmpty(value)) yield break;
+            int start = 0;
+            while (start < value.Length)
+            {
+                int open = value.IndexOf('{', start);
+                if (open < 0) yield break;
+                int close = value.IndexOf('}', open + 1);
+                if (close < 0) yield break;
+                string clsid = value.Substring(open, close - open + 1);
+                if (clsid.Length >= 38) yield return clsid;
+                start = close + 1;
+            }
+        }
+
+        private static string ReadClsidInfo(string clsid)
+        {
+            List<string> parts = new List<string>();
+            string subKey = @"Software\Classes\CLSID\" + clsid;
+            foreach (ActionTarget target in RegistryTargets(new string[] { subKey }, true, true))
+            {
+                using (RegistryKey key = RegistryHelper.OpenSubKey(target, false))
+                {
+                    if (key == null) continue;
+                    parts.Add(ReadString(key, ""));
+                    parts.Add(ReadChildDefault(target, "InprocServer32"));
+                    parts.Add(ReadChildDefault(target, "LocalServer32"));
+                    parts.Add(ReadChildDefault(target, "ProgID"));
+                }
+            }
+            return Join(parts.ToArray());
+        }
+
+        private static string ReadChildDefault(ActionTarget target, string child)
+        {
+            ActionTarget childTarget = CopyTarget(target);
+            childTarget.SubKey = target.SubKey + "\\" + child;
+            using (RegistryKey key = RegistryHelper.OpenSubKey(childTarget, false))
+            {
+                return ReadString(key, "");
+            }
+        }
+
+        private static string ResolveShortcutText(string file)
+        {
+            try
+            {
+                if (!file.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) return string.Empty;
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null) return string.Empty;
+                dynamic shell = Activator.CreateInstance(shellType);
+                dynamic shortcut = shell.CreateShortcut(file);
+                return Join(Convert.ToString(shortcut.TargetPath), Convert.ToString(shortcut.Arguments), Convert.ToString(shortcut.WorkingDirectory));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool IsTruthy(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            value = value.Trim();
+            return value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string HiddenInstallReason(string display, string uninstall, string systemComponent, string noRemove, string parentKey)
+        {
+            List<string> reasons = new List<string>();
+            if (string.IsNullOrWhiteSpace(display)) reasons.Add("没有显示名称");
+            if (string.IsNullOrWhiteSpace(uninstall)) reasons.Add("没有卸载命令");
+            if (IsTruthy(systemComponent)) reasons.Add("标记为系统组件，控制面板可能隐藏");
+            if (IsTruthy(noRemove)) reasons.Add("标记为不可移除");
+            if (!string.IsNullOrWhiteSpace(parentKey)) reasons.Add("挂在其它组件下面");
+            return reasons.Count == 0 ? "卸载入口异常" : string.Join("，", reasons.ToArray());
+        }
+
         private static int RiskRank(string risk)
         {
             if (risk == "高") return 0;
@@ -801,10 +1004,27 @@ namespace RogueCleanerV2
             if (target.Kind == "MoveFileToBackup") return target.FilePath;
             if (target.Kind == "DisableService") return "服务：" + target.ServiceName;
             if (target.Kind == "DisableScheduledTask") return "计划任务：" + target.TaskName;
+            if (target.Kind == "ReportOnly" && !string.IsNullOrWhiteSpace(target.FilePath)) return target.FilePath;
+            if (target.Kind == "ReportOnly" && string.IsNullOrWhiteSpace(target.SubKey)) return "只报告";
             string path = RegistryHelper.NativePath(target);
             if (!string.IsNullOrEmpty(target.ValueName)) path += "::" + target.ValueName;
             if (!string.IsNullOrEmpty(target.View) && target.View != "Default") path += " (" + target.View + ")";
             return path;
+        }
+
+        private static bool LooksLikeAdOrGuard(string text)
+        {
+            string[] tokens = new string[]
+            {
+                "popup", "pop", "ad", "advert", "news", "hot", "tips", "tip", "notify", "push", "minipage", "mini",
+                "watchdog", "daemon", "guard", "protect", "repair", "restore", "keeper", "serviceplatform",
+                "弹窗", "广告", "热点", "资讯", "推荐", "迷你页", "守护", "保护", "修复", "恢复", "推送"
+            };
+            foreach (string token in tokens)
+            {
+                if (!string.IsNullOrEmpty(text) && text.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
+            return false;
         }
 
         private static string DescribeContextMenu(string subKey, string title)
