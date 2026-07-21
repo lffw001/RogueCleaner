@@ -11,6 +11,7 @@ using System.Management;
 using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
@@ -23,15 +24,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.5.0")]
-[assembly: AssemblyFileVersion("2.0.5.0")]
+[assembly: AssemblyVersion("2.0.6.0")]
+[assembly: AssemblyFileVersion("2.0.6.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.5";
+        public const string Version = "2.0.6";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -1427,9 +1428,7 @@ namespace RogueCleanerV2
         private string BackupRegistry(string batchPath, ActionTarget target)
         {
             string native = RegistryHelper.NativePath(target);
-            string backupName = native;
-            if (!string.IsNullOrEmpty(target.ValueName)) backupName += "__value__" + target.ValueName;
-            string path = Path.Combine(Path.Combine(batchPath, "registry"), SafeFileName(backupName) + ".reg");
+            string path = Path.Combine(Path.Combine(batchPath, "registry"), RegistryBackupFileName(target));
             int exitCode = RunHidden("reg.exe", "export \"" + native + "\" \"" + path + "\" /y" + RegistryViewArg(target));
             if (exitCode != 0) Logger.Error("注册表备份失败：" + native, new InvalidOperationException("reg export 退出码 " + exitCode));
             return File.Exists(path) ? path : null;
@@ -1454,7 +1453,7 @@ namespace RogueCleanerV2
             {
                 summary.Total++;
                 string message;
-                bool ok = RestoreResult(result, out message);
+                bool ok = RestoreResult(batch, result, out message);
                 if (ok) summary.Succeeded++;
                 else summary.Failed++;
                 if (!string.IsNullOrWhiteSpace(message)) summary.Messages.Add(message);
@@ -1463,6 +1462,11 @@ namespace RogueCleanerV2
         }
 
         public bool RestoreResult(CleanupResult result, out string message)
+        {
+            return RestoreResult(null, result, out message);
+        }
+
+        private bool RestoreResult(CleanupBatch batch, CleanupResult result, out string message)
         {
             message = string.Empty;
             if (result == null)
@@ -1485,16 +1489,21 @@ namespace RogueCleanerV2
 
                 ActionTarget target = result.Target;
                 if ((target.Kind == "DeleteRegistryKey" || target.Kind == "DeleteRegistryValue") &&
-                    !string.IsNullOrEmpty(result.Backup) &&
-                    result.Backup.EndsWith(".reg", StringComparison.OrdinalIgnoreCase) &&
-                    File.Exists(result.Backup))
+                    target != null)
                 {
-                    int exitCode = RunHidden("reg.exe", "import \"" + result.Backup + "\"" + RegistryViewArg(target));
+                    string registryBackup = ResolveRegistryBackupPath(batch, result, target);
+                    if (string.IsNullOrEmpty(registryBackup))
+                    {
+                        message = result.Title + "：旧版清理记录没有找到注册表备份文件，无法完整恢复。";
+                        return false;
+                    }
+                    int exitCode = RunHidden("reg.exe", "import \"" + registryBackup + "\"" + RegistryViewArg(target));
                     bool restored = target.Kind == "DeleteRegistryKey" ? RegistryHelper.KeyExists(target) : RegistryHelper.ValueExists(target);
                     message = result.Title + "：" + (restored ? "注册表已恢复。" : "注册表恢复后复核失败。reg import 退出码 " + exitCode);
                     return exitCode == 0 && restored;
                 }
-                if (target.Kind == "MoveFileToBackup" && !string.IsNullOrEmpty(result.Backup) && File.Exists(result.Backup))
+                string backup = ResolveExistingBackupPath(batch, result);
+                if (target.Kind == "MoveFileToBackup" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
                 {
                     string dest = Environment.ExpandEnvironmentVariables(target.FilePath);
                     string parent = Path.GetDirectoryName(dest);
@@ -1504,14 +1513,14 @@ namespace RogueCleanerV2
                         message = result.Title + "：原位置已经有同名文件，备份已保留，没有覆盖。";
                         return false;
                     }
-                    File.Move(result.Backup, dest);
+                    File.Move(backup, dest);
                     bool restored = File.Exists(dest);
                     message = result.Title + "：" + (restored ? "文件已移回原位置。" : "文件恢复后复核失败。");
                     return restored;
                 }
-                if (target.Kind == "DisableService" && !string.IsNullOrEmpty(result.Backup) && File.Exists(result.Backup))
+                if (target.Kind == "DisableService" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
                 {
-                    string state = File.ReadAllText(result.Backup, Encoding.UTF8);
+                    string state = File.ReadAllText(backup, Encoding.UTF8);
                     string start = state.IndexOf("Auto", StringComparison.OrdinalIgnoreCase) >= 0 ? "auto" : (state.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) >= 0 ? "disabled" : "demand");
                     int exitCode = RunHidden("sc.exe", "config \"" + target.ServiceName + "\" start= " + start);
                     string restoredState = GetServiceState(target.ServiceName);
@@ -1521,10 +1530,10 @@ namespace RogueCleanerV2
                     message = result.Title + "：" + (restored ? "服务启动状态已恢复。" : "服务恢复后复核失败，当前状态 " + restoredState + "，命令退出码 " + exitCode);
                     return exitCode == 0 && restored;
                 }
-                if (target.Kind == "DisableScheduledTask" && !string.IsNullOrEmpty(result.Backup) && Directory.Exists(result.Backup))
+                if (target.Kind == "DisableScheduledTask" && !string.IsNullOrEmpty(backup) && Directory.Exists(backup))
                 {
-                    string xml = Path.Combine(result.Backup, "task.xml");
-                    string stateFile = Path.Combine(result.Backup, "state.txt");
+                    string xml = Path.Combine(backup, "task.xml");
+                    string stateFile = Path.Combine(backup, "state.txt");
                     if (!ScheduledTaskExists(target.TaskName) && File.Exists(xml))
                     {
                         int createCode = RunHidden("schtasks.exe", "/Create /TN \"" + target.TaskName + "\" /XML \"" + xml + "\" /F");
@@ -1552,6 +1561,113 @@ namespace RogueCleanerV2
                 Logger.Error("恢复失败：" + result.Title, ex);
                 message = result.Title + "：" + ex.Message;
                 return false;
+            }
+        }
+
+        private string ResolveExistingBackupPath(CleanupBatch batch, CleanupResult result)
+        {
+            if (result == null || string.IsNullOrWhiteSpace(result.Backup)) return null;
+            string backup = Environment.ExpandEnvironmentVariables(result.Backup);
+            if (File.Exists(backup) || Directory.Exists(backup)) return backup;
+            if (batch != null && !string.IsNullOrWhiteSpace(batch.Path) && !Path.IsPathRooted(backup))
+            {
+                string combined = Path.Combine(batch.Path, backup);
+                if (File.Exists(combined) || Directory.Exists(combined)) return combined;
+            }
+            if (batch != null && !string.IsNullOrWhiteSpace(batch.Path) && Directory.Exists(batch.Path))
+            {
+                string name = Path.GetFileName(backup);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    foreach (string candidate in Directory.GetFiles(batch.Path, name, SearchOption.AllDirectories))
+                    {
+                        if (File.Exists(candidate)) return candidate;
+                    }
+                    foreach (string candidate in Directory.GetDirectories(batch.Path, name, SearchOption.AllDirectories))
+                    {
+                        if (Directory.Exists(candidate)) return candidate;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private string ResolveRegistryBackupPath(CleanupBatch batch, CleanupResult result, ActionTarget target)
+        {
+            string direct = ResolveExistingBackupPath(batch, result);
+            if (!string.IsNullOrEmpty(direct) && direct.EndsWith(".reg", StringComparison.OrdinalIgnoreCase) && File.Exists(direct)) return direct;
+            if (batch == null || string.IsNullOrWhiteSpace(batch.Path) || target == null) return null;
+
+            string registryDir = Path.Combine(batch.Path, "registry");
+            if (!Directory.Exists(registryDir)) return null;
+
+            string currentName = RegistryBackupFileName(target);
+            string currentPath = Path.Combine(registryDir, currentName);
+            if (File.Exists(currentPath)) return currentPath;
+
+            string legacyPath = Path.Combine(registryDir, LegacyRegistryBackupFileName(target));
+            if (File.Exists(legacyPath)) return legacyPath;
+
+            string needle = RegistryFileNeedle(target);
+            if (!string.IsNullOrEmpty(needle))
+            {
+                foreach (string file in Directory.GetFiles(registryDir, "*.reg", SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        string text = File.ReadAllText(file);
+                        if (text.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) return file;
+                    }
+                    catch { }
+                }
+            }
+            return null;
+        }
+
+        private static string RegistryBackupFileName(ActionTarget target)
+        {
+            return CompactBackupFileName(RegistryBackupRawName(target), ".reg");
+        }
+
+        private static string LegacyRegistryBackupFileName(ActionTarget target)
+        {
+            return SafeFileName(RegistryBackupRawName(target)) + ".reg";
+        }
+
+        private static string RegistryBackupRawName(ActionTarget target)
+        {
+            string backupName = RegistryHelper.NativePath(target);
+            if (!string.IsNullOrEmpty(target.ValueName)) backupName += "__value__" + target.ValueName;
+            return backupName;
+        }
+
+        private static string RegistryFileNeedle(ActionTarget target)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(target.SubKey)) return string.Empty;
+            string hive = string.Equals(target.Hive, "HKLM", StringComparison.OrdinalIgnoreCase) ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER";
+            return "[" + hive + "\\" + target.SubKey + "]";
+        }
+
+        private static string CompactBackupFileName(string raw, string extension)
+        {
+            string safe = SafeFileName(raw);
+            if (safe.Length <= 120) return safe + extension;
+            string prefix = safe.Substring(0, Math.Min(56, safe.Length));
+            string suffix = safe.Substring(Math.Max(0, safe.Length - 44));
+            return prefix + "__" + ShortHash(raw) + "__" + suffix + extension;
+        }
+
+        private static string ShortHash(string value)
+        {
+            using (SHA1 sha = SHA1.Create())
+            {
+                byte[] bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? string.Empty));
+                StringBuilder builder = new StringBuilder();
+                for (int i = 0; i < bytes.Length && builder.Length < 12; i++)
+                {
+                    builder.Append(bytes[i].ToString("x2"));
+                }
+                return builder.ToString();
             }
         }
 
@@ -2507,7 +2623,7 @@ namespace RogueCleanerV2
             selectAllButton.Click += delegate { SetAll(true); };
             lowButton.Click += delegate { SelectLowRisk(); };
             restoreButton.Click += delegate { new RecoveryCenterForm(store).ShowDialog(this); };
-            updateButton.Click += delegate { UpdateChecker.CheckNow(this, true); };
+            updateButton.Click += delegate { UpdateChecker.CheckNow(store, this, true); };
             adminButton.Click += delegate { AdminUtil.RelaunchAsAdmin(); };
             searchBox.TextChanged += delegate { ApplyFilter(); };
             rows.ListChanged += delegate { UpdateSummary(); };
@@ -3215,6 +3331,21 @@ namespace RogueCleanerV2
         }
     }
 
+    internal sealed class GitHubReleaseInfo
+    {
+        public string tag_name { get; set; }
+        public string body { get; set; }
+        public string html_url { get; set; }
+        public List<GitHubReleaseAsset> assets { get; set; }
+    }
+
+    internal sealed class GitHubReleaseAsset
+    {
+        public string name { get; set; }
+        public string browser_download_url { get; set; }
+        public long size { get; set; }
+    }
+
     internal static class UpdateChecker
     {
         public static void CheckOnStartup(DataStore store, IWin32Window owner)
@@ -3228,7 +3359,7 @@ namespace RogueCleanerV2
                     if (DateTime.TryParse(File.ReadAllText(marker), out last) && (DateTime.Now - last).TotalHours < 24) return;
                 }
                 File.WriteAllText(marker, DateTime.Now.ToString("o"), Encoding.UTF8);
-                Task.Factory.StartNew(delegate { CheckNow(owner, false); });
+                Task.Factory.StartNew(delegate { CheckNow(store, owner, false); });
             }
             catch (Exception ex)
             {
@@ -3236,29 +3367,45 @@ namespace RogueCleanerV2
             }
         }
 
-        public static void CheckNow(IWin32Window owner, bool showNoUpdate)
+        public static void CheckNow(DataStore store, IWin32Window owner, bool showNoUpdate)
         {
             try
             {
+                if (store == null) throw new ArgumentNullException("store");
                 using (WebClient client = new WebClient())
                 {
                     client.Encoding = Encoding.UTF8;
                     client.Headers.Add("User-Agent", "RogueCleaner/" + AppMeta.Version);
                     client.Headers.Add("Accept", "application/vnd.github+json");
-                    string json = client.DownloadString(AppMeta.LatestApiUrl);
-                    string tag = ExtractJsonString(json, "tag_name");
-                    string body = ExtractJsonString(json, "body");
-                    string html = ExtractJsonString(json, "html_url");
+                    GitHubReleaseInfo release = LoadLatestRelease(client);
+                    string tag = release == null ? string.Empty : release.tag_name;
+                    string body = release == null ? string.Empty : release.body;
                     if (string.IsNullOrWhiteSpace(tag))
                     {
                         throw new InvalidDataException("GitHub Release 信息缺少版本号。");
                     }
-                    if (string.IsNullOrWhiteSpace(html)) html = AppMeta.ReleasesUrl;
                     string latest = tag.TrimStart('v', 'V');
                     if (IsNewer(latest, AppMeta.Version))
                     {
-                        DialogResult answer = MessageBox.Show(owner, "发现新版本：" + tag + "\n当前版本：" + AppMeta.Version + "\n\n" + TrimBody(body) + "\n\n是否打开 GitHub 下载页？", "发现更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                        if (answer == DialogResult.Yes) Process.Start(new ProcessStartInfo { FileName = html, UseShellExecute = true });
+                        GitHubReleaseAsset asset = FindExeAsset(release);
+                        if (asset == null)
+                        {
+                            throw new InvalidDataException("这个版本没有可自动更新的 exe 资产。发布时需要附带 RogueCleaner-*.exe。");
+                        }
+
+                        DialogResult answer = MessageBox.Show(owner,
+                            "发现新版本：" + tag +
+                            "\n当前版本：" + AppMeta.Version +
+                            "\n\n" + TrimBody(body) +
+                            "\n\n是否现在下载并自动重启更新？",
+                            "发现更新",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Information,
+                            MessageBoxDefaultButton.Button1);
+                        if (answer == DialogResult.Yes)
+                        {
+                            DownloadAndRestart(store, client, asset, tag, owner);
+                        }
                     }
                     else if (showNoUpdate)
                     {
@@ -3271,9 +3418,137 @@ namespace RogueCleanerV2
                 Logger.Error("检查更新失败", ex);
                 if (showNoUpdate)
                 {
-                    MessageBox.Show(owner, "检查更新失败。\n\n可能是系统 TLS、代理或 GitHub API 限制。\n可以手动打开：" + AppMeta.ReleasesUrl + "\n\n错误：" + ConciseError(ex), "检查更新失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(owner, "检查更新失败。\n\n可能是系统 TLS、代理、GitHub API 限制，或者本次发布缺少直出 exe 更新包。\n\n错误：" + ConciseError(ex), "检查更新失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
+        }
+
+        private static GitHubReleaseInfo LoadLatestRelease(WebClient client)
+        {
+            string json = client.DownloadString(AppMeta.LatestApiUrl);
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            return serializer.Deserialize<GitHubReleaseInfo>(json);
+        }
+
+        private static GitHubReleaseAsset FindExeAsset(GitHubReleaseInfo release)
+        {
+            if (release == null || release.assets == null) return null;
+            GitHubReleaseAsset fallback = null;
+            foreach (GitHubReleaseAsset asset in release.assets)
+            {
+                if (asset == null || string.IsNullOrWhiteSpace(asset.name) || string.IsNullOrWhiteSpace(asset.browser_download_url)) continue;
+                if (!asset.name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
+                if (fallback == null) fallback = asset;
+                if (asset.name.IndexOf("RogueCleaner", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    asset.name.IndexOf(AppMeta.ProductName, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return asset;
+                }
+            }
+            return fallback;
+        }
+
+        private static void DownloadAndRestart(DataStore store, WebClient client, GitHubReleaseAsset asset, string tag, IWin32Window owner)
+        {
+            if (!CanWriteToExecutableDirectory())
+            {
+                MessageBox.Show(owner,
+                    "当前目录没有覆盖主程序的权限。\n\n请把软件放到桌面或普通文件夹，或者以管理员身份启动后再检查更新。",
+                    "无法自动更新",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            Directory.CreateDirectory(store.Updates);
+            string safeTag = SafeFileName(tag.TrimStart('v', 'V'));
+            string downloadPath = Path.Combine(store.Updates, "RogueCleaner-update-" + safeTag + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".exe");
+            try
+            {
+                if (File.Exists(downloadPath)) File.Delete(downloadPath);
+                client.Headers["Accept"] = "application/octet-stream";
+                client.DownloadFile(asset.browser_download_url, downloadPath);
+                ValidateDownloadedExe(downloadPath);
+                MessageBox.Show(owner,
+                    "新版本已下载完成。\n\n点确定后软件会关闭，自动替换主程序并重新打开。",
+                    "准备重启更新",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                StartHiddenUpdater(store, downloadPath);
+                Environment.Exit(0);
+            }
+            catch
+            {
+                try { if (File.Exists(downloadPath)) File.Delete(downloadPath); } catch { }
+                throw;
+            }
+        }
+
+        private static bool CanWriteToExecutableDirectory()
+        {
+            try
+            {
+                string exeDir = Path.GetDirectoryName(Application.ExecutablePath);
+                string probe = Path.Combine(exeDir, ".roguecleaner-update-write-test-" + Process.GetCurrentProcess().Id + ".tmp");
+                File.WriteAllText(probe, DateTime.Now.ToString("o"), Encoding.UTF8);
+                File.Delete(probe);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void ValidateDownloadedExe(string path)
+        {
+            FileInfo file = new FileInfo(path);
+            if (!file.Exists || file.Length < 65536) throw new InvalidDataException("下载到的文件太小，不像完整 exe。");
+            using (FileStream stream = File.OpenRead(path))
+            {
+                int b1 = stream.ReadByte();
+                int b2 = stream.ReadByte();
+                if (b1 != 'M' || b2 != 'Z') throw new InvalidDataException("下载到的不是 Windows exe 文件。");
+            }
+        }
+
+        private static void StartHiddenUpdater(DataStore store, string downloadedExe)
+        {
+            string currentExe = Application.ExecutablePath;
+            string safeVersion = SafeFileName(AppMeta.Version);
+            string scriptPath = Path.Combine(store.Updates, "apply-update-from-" + safeVersion + ".cmd");
+            string logPath = Path.Combine(store.Updates, "update-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".log");
+            string script =
+                "@echo off\r\n" +
+                "setlocal\r\n" +
+                "set \"SRC=" + downloadedExe + "\"\r\n" +
+                "set \"DST=" + currentExe + "\"\r\n" +
+                "set \"LOG=" + logPath + "\"\r\n" +
+                "set TRY=0\r\n" +
+                ":copyagain\r\n" +
+                "copy /y \"%SRC%\" \"%DST%\" >nul 2>>\"%LOG%\"\r\n" +
+                "if not errorlevel 1 goto launch\r\n" +
+                "set /a TRY+=1\r\n" +
+                "if %TRY% GEQ 90 goto fail\r\n" +
+                "timeout /t 1 /nobreak >nul\r\n" +
+                "goto copyagain\r\n" +
+                ":launch\r\n" +
+                "start \"\" \"%DST%\"\r\n" +
+                "del \"%SRC%\" >nul 2>nul\r\n" +
+                "del \"%~f0\" >nul 2>nul\r\n" +
+                "exit /b 0\r\n" +
+                ":fail\r\n" +
+                "echo %date% %time% 更新失败，无法覆盖主程序。>>\"%LOG%\"\r\n" +
+                "start \"\" \"%DST%\"\r\n" +
+                "exit /b 1\r\n";
+            File.WriteAllText(scriptPath, script, Encoding.Default);
+
+            ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/c \"" + scriptPath + "\"");
+            psi.CreateNoWindow = true;
+            psi.UseShellExecute = false;
+            psi.WindowStyle = ProcessWindowStyle.Hidden;
+            Process.Start(psi);
         }
 
         private static bool IsNewer(string latest, string current)
@@ -3291,58 +3566,11 @@ namespace RogueCleanerV2
             return body.Length > 300 ? body.Substring(0, 300) + "..." : body;
         }
 
-        private static string ExtractJsonString(string json, string name)
+        private static string SafeFileName(string value)
         {
-            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return string.Empty;
-            string needle = "\"" + name + "\"";
-            int pos = json.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
-            if (pos < 0) return string.Empty;
-            pos = json.IndexOf(':', pos + needle.Length);
-            if (pos < 0) return string.Empty;
-            pos++;
-            while (pos < json.Length && char.IsWhiteSpace(json[pos])) pos++;
-            if (pos >= json.Length || json[pos] != '"') return string.Empty;
-            pos++;
-
-            StringBuilder result = new StringBuilder();
-            bool escaped = false;
-            for (; pos < json.Length; pos++)
-            {
-                char c = json[pos];
-                if (escaped)
-                {
-                    if (c == 'n') result.Append('\n');
-                    else if (c == 'r') result.Append('\r');
-                    else if (c == 't') result.Append('\t');
-                    else if (c == 'b') result.Append('\b');
-                    else if (c == 'f') result.Append('\f');
-                    else if (c == 'u' && pos + 4 < json.Length)
-                    {
-                        string hex = json.Substring(pos + 1, 4);
-                        int code;
-                        if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out code))
-                        {
-                            result.Append((char)code);
-                            pos += 4;
-                        }
-                    }
-                    else
-                    {
-                        result.Append(c);
-                    }
-                    escaped = false;
-                    continue;
-                }
-
-                if (c == '\\')
-                {
-                    escaped = true;
-                    continue;
-                }
-                if (c == '"') return result.ToString();
-                result.Append(c);
-            }
-            return string.Empty;
+            if (string.IsNullOrWhiteSpace(value)) return "update";
+            foreach (char c in Path.GetInvalidFileNameChars()) value = value.Replace(c, '_');
+            return value.Replace('\\', '_').Replace('/', '_').Replace(':', '_');
         }
 
         private static string ConciseError(Exception ex)

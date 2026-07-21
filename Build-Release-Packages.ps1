@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 $rar = 'C:\Program Files\WinRAR\Rar.exe'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$version = '2.0.6'
 $releaseRoot = Join-Path $root 'release'
 $oldDir = Join-Path $releaseRoot '_old'
 $workRoot = Join-Path $releaseRoot "package-$stamp"
@@ -28,7 +29,7 @@ if (!(Test-Path -LiteralPath $rar -PathType Leaf)) {
 
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $oldDir -Force | Out-Null
-Get-ChildItem -LiteralPath $releaseRoot -Filter '*.rar' -File | ForEach-Object {
+Get-ChildItem -LiteralPath $releaseRoot -File | Where-Object { $_.Extension -in @('.rar', '.exe') } | ForEach-Object {
     Move-Item -LiteralPath $_.FullName -Destination (Join-Path $oldDir $_.Name) -Force
 }
 if (Test-Path -LiteralPath $workRoot) {
@@ -53,8 +54,9 @@ foreach ($file in @(
     Copy-Item -LiteralPath (Join-Path $root "dist\流氓软件克星\$file") -Destination $exeStage -Force
 }
 
-$sourceArchive = Join-Path $releaseRoot "RogueCleaner-Source-v2.0.5-$stamp.rar"
-$exeArchive = Join-Path $releaseRoot "RogueCleaner-Transparent-v2.0.5-$stamp.rar"
+$sourceArchive = Join-Path $releaseRoot "RogueCleaner-Source-v$version-$stamp.rar"
+$exeArchive = Join-Path $releaseRoot "RogueCleaner-Transparent-v$version-$stamp.rar"
+$directExe = Join-Path $releaseRoot "RogueCleaner-v$version-$stamp.exe"
 Push-Location $workRoot
 try {
     & $rar a -r -m5 -idq $sourceArchive 'RogueCleaner-Source'
@@ -65,7 +67,9 @@ try {
 finally {
     Pop-Location
 }
+Copy-Item -LiteralPath (Join-Path $root 'dist\流氓软件克星\流氓软件克星.exe') -Destination $directExe -Force
 Move-Item -LiteralPath $workRoot -Destination (Join-Path $oldDir (Split-Path -Leaf $workRoot)) -Force
 
 Write-Host "SOURCE=$sourceArchive"
 Write-Host "TRANSPARENT=$exeArchive"
+Write-Host "DIRECT_EXE=$directExe"
