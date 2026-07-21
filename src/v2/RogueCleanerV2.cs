@@ -23,15 +23,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.3.0")]
-[assembly: AssemblyFileVersion("2.0.3.0")]
+[assembly: AssemblyVersion("2.0.4.0")]
+[assembly: AssemblyFileVersion("2.0.4.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.3";
+        public const string Version = "2.0.4";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -2373,9 +2373,9 @@ namespace RogueCleanerV2
             authorLink.Text = "作者: " + AppMeta.AuthorName;
             authorLink.TextAlign = ContentAlignment.MiddleRight;
             authorLink.Padding = new Padding(0, 0, 18, 0);
-            authorLink.LinkColor = Color.FromArgb(15, 118, 110);
-            authorLink.ActiveLinkColor = Color.FromArgb(234, 88, 12);
-            authorLink.VisitedLinkColor = Color.FromArgb(15, 118, 110);
+            authorLink.LinkColor = Color.FromArgb(37, 99, 235);
+            authorLink.ActiveLinkColor = Color.FromArgb(29, 78, 216);
+            authorLink.VisitedLinkColor = Color.FromArgb(37, 99, 235);
             footer.Controls.Add(authorLink, 1, 0);
 
             flushTimer = new System.Windows.Forms.Timer();
@@ -2678,6 +2678,10 @@ namespace RogueCleanerV2
         private readonly ListBox batchList = new ListBox();
         private readonly DataGridView grid = new DataGridView();
         private readonly Button restoreBatchButton = new Button();
+        private readonly Button closeButton = new Button();
+        private readonly Label summaryLabel = new Label();
+        private readonly Label statusLabel = new Label();
+        private readonly Label emptyLabel = new Label();
         private List<CleanupBatch> batches = new List<CleanupBatch>();
 
         public RecoveryCenterForm(DataStore store)
@@ -2690,35 +2694,208 @@ namespace RogueCleanerV2
         private void BuildUi()
         {
             Text = "恢复中心";
-            Size = new Size(980, 620);
+            Size = new Size(1060, 680);
+            MinimumSize = new Size(980, 620);
             StartPosition = FormStartPosition.CenterParent;
+            AutoScaleMode = AutoScaleMode.Dpi;
+            BackColor = Color.FromArgb(241, 245, 249);
             Font = new Font("Microsoft YaHei UI", 9F);
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
-            root.ColumnCount = 2;
-            root.RowCount = 2;
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280));
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.ColumnCount = 1;
+            root.RowCount = 3;
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             Controls.Add(root);
 
+            Panel header = new Panel();
+            header.Dock = DockStyle.Fill;
+            header.BackColor = Color.FromArgb(15, 118, 110);
+            root.Controls.Add(header, 0, 0);
+
+            Label title = new Label();
+            title.Text = "恢复中心";
+            title.ForeColor = Color.White;
+            title.BackColor = Color.Transparent;
+            title.Font = new Font("Microsoft YaHei UI", 22F, FontStyle.Bold);
+            title.AutoSize = true;
+            title.Location = new Point(28, 18);
+            header.Controls.Add(title);
+
+            Label version = new Label();
+            version.Text = "v" + AppMeta.Version;
+            version.ForeColor = Color.White;
+            version.BackColor = Color.FromArgb(13, 148, 136);
+            version.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            version.TextAlign = ContentAlignment.MiddleCenter;
+            version.AutoSize = false;
+            version.Size = new Size(78, 28);
+            version.Location = new Point(160, 27);
+            header.Controls.Add(version);
+
+            Label sub = new Label();
+            sub.Text = "这里放的是清理前备份。恢复前看清批次，恢复后建议重新扫描一次。";
+            sub.ForeColor = Color.FromArgb(224, 242, 254);
+            sub.BackColor = Color.Transparent;
+            sub.AutoSize = true;
+            sub.Location = new Point(32, 62);
+            header.Controls.Add(sub);
+
+            TableLayoutPanel body = new TableLayoutPanel();
+            body.Dock = DockStyle.Fill;
+            body.ColumnCount = 2;
+            body.RowCount = 1;
+            body.Padding = new Padding(18, 14, 18, 12);
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.Controls.Add(body, 0, 1);
+
+            Panel leftPanel = new Panel();
+            leftPanel.Dock = DockStyle.Fill;
+            leftPanel.BackColor = Color.White;
+            leftPanel.BorderStyle = BorderStyle.FixedSingle;
+            leftPanel.Padding = new Padding(14, 12, 14, 14);
+            body.Controls.Add(leftPanel, 0, 0);
+
+            TableLayoutPanel leftLayout = new TableLayoutPanel();
+            leftLayout.Dock = DockStyle.Fill;
+            leftLayout.RowCount = 3;
+            leftLayout.ColumnCount = 1;
+            leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            leftPanel.Controls.Add(leftLayout);
+
+            Label batchTitle = new Label();
+            batchTitle.Text = "备份批次";
+            batchTitle.Dock = DockStyle.Fill;
+            batchTitle.Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold);
+            batchTitle.ForeColor = Color.FromArgb(15, 23, 42);
+            batchTitle.TextAlign = ContentAlignment.MiddleLeft;
+            leftLayout.Controls.Add(batchTitle, 0, 0);
+
+            Label batchHint = new Label();
+            batchHint.Text = "选中一个批次，右侧看具体恢复内容。";
+            batchHint.Dock = DockStyle.Fill;
+            batchHint.ForeColor = Color.FromArgb(71, 85, 105);
+            batchHint.TextAlign = ContentAlignment.MiddleLeft;
+            leftLayout.Controls.Add(batchHint, 0, 1);
+
             batchList.Dock = DockStyle.Fill;
-            root.Controls.Add(batchList, 0, 0);
+            batchList.BorderStyle = BorderStyle.None;
+            batchList.BackColor = Color.White;
+            batchList.ForeColor = Color.FromArgb(15, 23, 42);
+            batchList.DrawMode = DrawMode.OwnerDrawFixed;
+            batchList.ItemHeight = 58;
+            batchList.IntegralHeight = false;
+            leftLayout.Controls.Add(batchList, 0, 2);
+
+            TableLayoutPanel rightLayout = new TableLayoutPanel();
+            rightLayout.Dock = DockStyle.Fill;
+            rightLayout.RowCount = 2;
+            rightLayout.ColumnCount = 1;
+            rightLayout.Margin = new Padding(12, 0, 0, 0);
+            rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            body.Controls.Add(rightLayout, 1, 0);
+
+            summaryLabel.Dock = DockStyle.Fill;
+            summaryLabel.BackColor = Color.FromArgb(226, 232, 240);
+            summaryLabel.ForeColor = Color.FromArgb(15, 23, 42);
+            summaryLabel.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+            summaryLabel.Padding = new Padding(14, 0, 0, 0);
+            summaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+            summaryLabel.Text = "正在读取备份批次...";
+            rightLayout.Controls.Add(summaryLabel, 0, 0);
+
+            Panel gridPanel = new Panel();
+            gridPanel.Dock = DockStyle.Fill;
+            gridPanel.BackColor = Color.White;
+            gridPanel.BorderStyle = BorderStyle.FixedSingle;
+            rightLayout.Controls.Add(gridPanel, 0, 1);
+
             grid.Dock = DockStyle.Fill;
-            grid.AutoGenerateColumns = true;
+            grid.AutoGenerateColumns = false;
             grid.ReadOnly = true;
             grid.AllowUserToAddRows = false;
-            root.Controls.Add(grid, 1, 0);
-            restoreBatchButton.Text = "恢复选中批次";
-            restoreBatchButton.Width = 140;
-            restoreBatchButton.Height = 32;
-            restoreBatchButton.Margin = new Padding(12, 8, 0, 0);
-            root.Controls.Add(restoreBatchButton, 0, 1);
+            grid.AllowUserToDeleteRows = false;
+            grid.RowHeadersVisible = false;
+            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            grid.AllowUserToResizeColumns = false;
+            grid.AllowUserToResizeRows = false;
+            grid.ScrollBars = ScrollBars.Vertical;
+            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            grid.RowTemplate.Height = 34;
+            grid.ColumnHeadersHeight = 38;
+            grid.BackgroundColor = Color.White;
+            grid.BorderStyle = BorderStyle.None;
+            grid.EnableHeadersVisualStyles = false;
+            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(15, 118, 110);
+            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 251, 241);
+            grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(15, 23, 42);
+            grid.ShowCellToolTips = true;
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "结果", FillWeight = 72, MinimumWidth = 58 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", FillWeight = 105, MinimumWidth = 80 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "来源", FillWeight = 130, MinimumWidth = 100 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Title", HeaderText = "恢复对象", FillWeight = 220, MinimumWidth = 150 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Message", HeaderText = "当时处理结果", FillWeight = 230, MinimumWidth = 150 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "TechnicalLocation", HeaderText = "技术位置", FillWeight = 230, MinimumWidth = 150 });
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            }
+            gridPanel.Controls.Add(grid);
+
+            emptyLabel.Dock = DockStyle.Fill;
+            emptyLabel.BackColor = Color.White;
+            emptyLabel.ForeColor = Color.FromArgb(71, 85, 105);
+            emptyLabel.Font = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold);
+            emptyLabel.TextAlign = ContentAlignment.MiddleCenter;
+            emptyLabel.Text = "暂时没有备份批次。\n清理过项目以后，这里会出现可恢复记录。";
+            emptyLabel.Visible = false;
+            gridPanel.Controls.Add(emptyLabel);
+            emptyLabel.BringToFront();
+
+            TableLayoutPanel footer = new TableLayoutPanel();
+            footer.Dock = DockStyle.Fill;
+            footer.BackColor = Color.FromArgb(226, 232, 240);
+            footer.ColumnCount = 3;
+            footer.RowCount = 1;
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            root.Controls.Add(footer, 0, 2);
+
+            statusLabel.Dock = DockStyle.Fill;
+            statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            statusLabel.Padding = new Padding(18, 0, 0, 0);
+            statusLabel.Text = "就绪。";
+            footer.Controls.Add(statusLabel, 0, 0);
+
+            ConfigureRecoveryButton(restoreBatchButton, "恢复选中批次", Color.FromArgb(79, 70, 229));
+            restoreBatchButton.Dock = DockStyle.Fill;
+            restoreBatchButton.Margin = new Padding(0, 6, 10, 6);
+            footer.Controls.Add(restoreBatchButton, 1, 0);
+
+            ConfigureRecoveryButton(closeButton, "关闭", Color.FromArgb(71, 85, 105));
+            closeButton.Dock = DockStyle.Fill;
+            closeButton.Margin = new Padding(0, 6, 18, 6);
+            footer.Controls.Add(closeButton, 2, 0);
 
             batchList.SelectedIndexChanged += delegate { ShowSelectedBatch(); };
+            batchList.DrawItem += BatchListDrawItem;
+            grid.CellFormatting += GridCellFormatting;
+            grid.CellToolTipTextNeeded += GridCellToolTipTextNeeded;
             restoreBatchButton.Click += delegate { RestoreSelectedBatch(); };
+            closeButton.Click += delegate { Close(); };
         }
 
         private void LoadBatches()
@@ -2729,15 +2906,39 @@ namespace RogueCleanerV2
             {
                 int failed = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
                 int done = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Done"; });
-                batchList.Items.Add(batch.Id + "  成功 " + done + "  失败 " + failed);
+                int launched = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
+                int total = batch.Results == null ? 0 : batch.Results.Count;
+                batchList.Items.Add(new BatchListItem(batch, "批次 " + batch.Id, "共 " + total + " 项，成功 " + done + "，弹窗 " + launched + "，失败 " + failed));
             }
             if (batchList.Items.Count > 0) batchList.SelectedIndex = 0;
+            else
+            {
+                summaryLabel.Text = "没有备份批次。";
+                statusLabel.Text = "还没有清理记录，所以恢复中心是空的。";
+                restoreBatchButton.Enabled = false;
+                grid.DataSource = null;
+                grid.Visible = false;
+                emptyLabel.Visible = true;
+                emptyLabel.BringToFront();
+            }
         }
 
         private void ShowSelectedBatch()
         {
             if (batchList.SelectedIndex < 0 || batchList.SelectedIndex >= batches.Count) return;
-            grid.DataSource = batches[batchList.SelectedIndex].Results;
+            CleanupBatch batch = batches[batchList.SelectedIndex];
+            List<CleanupResult> results = batch.Results ?? new List<CleanupResult>();
+            int done = results.Count(delegate(CleanupResult r) { return r.Status == "Done"; });
+            int failed = results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
+            int launched = results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
+            int skipped = results.Count(delegate(CleanupResult r) { return r.Status == "Skipped"; });
+            grid.DataSource = new BindingList<CleanupResult>(results);
+            summaryLabel.Text = "批次 " + batch.Id + "    时间 " + batch.CreatedAt + "    成功 " + done + "，弹窗 " + launched + "，失败 " + failed + "，跳过 " + skipped;
+            statusLabel.Text = "备份目录：" + batch.Path;
+            restoreBatchButton.Enabled = results.Count > 0;
+            grid.Visible = results.Count > 0;
+            emptyLabel.Visible = results.Count == 0;
+            if (emptyLabel.Visible) emptyLabel.BringToFront();
         }
 
         private void RestoreSelectedBatch()
@@ -2749,12 +2950,115 @@ namespace RogueCleanerV2
             try
             {
                 new CleanerEngine(store).RestoreBatch(batch);
+                statusLabel.Text = "恢复命令已执行。建议重新扫描确认。";
                 MessageBox.Show("恢复命令已执行。建议重新扫描确认。", "恢复完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 Logger.Error("恢复失败", ex);
                 MessageBox.Show(ex.Message, "恢复失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BatchListDrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            Color back = selected ? Color.FromArgb(204, 251, 241) : Color.White;
+            Color titleColor = selected ? Color.FromArgb(15, 118, 110) : Color.FromArgb(15, 23, 42);
+            Color subColor = Color.FromArgb(71, 85, 105);
+            using (SolidBrush brush = new SolidBrush(back)) e.Graphics.FillRectangle(brush, e.Bounds);
+            if (selected)
+            {
+                using (SolidBrush accent = new SolidBrush(Color.FromArgb(15, 118, 110)))
+                {
+                    e.Graphics.FillRectangle(accent, new Rectangle(e.Bounds.Left, e.Bounds.Top + 6, 4, e.Bounds.Height - 12));
+                }
+            }
+            BatchListItem item = batchList.Items[e.Index] as BatchListItem;
+            string title = item == null ? Convert.ToString(batchList.Items[e.Index]) : item.Title;
+            string subtitle = item == null ? string.Empty : item.Subtitle;
+            Rectangle titleRect = new Rectangle(e.Bounds.Left + 14, e.Bounds.Top + 8, e.Bounds.Width - 20, 22);
+            Rectangle subRect = new Rectangle(e.Bounds.Left + 14, e.Bounds.Top + 32, e.Bounds.Width - 20, 20);
+            TextRenderer.DrawText(e.Graphics, title, new Font("Microsoft YaHei UI", 9F, FontStyle.Bold), titleRect, titleColor, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(e.Graphics, subtitle, Font, subRect, subColor, TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            using (Pen line = new Pen(Color.FromArgb(226, 232, 240)))
+            {
+                e.Graphics.DrawLine(line, e.Bounds.Left + 10, e.Bounds.Bottom - 1, e.Bounds.Right - 10, e.Bounds.Bottom - 1);
+            }
+        }
+
+        private void GridCellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            DataGridViewColumn column = grid.Columns[e.ColumnIndex];
+            if (!string.Equals(column.DataPropertyName, "Status", StringComparison.OrdinalIgnoreCase)) return;
+            string status = Convert.ToString(e.Value);
+            if (status == "Done")
+            {
+                e.Value = "已处理";
+                e.CellStyle.BackColor = Color.FromArgb(220, 252, 231);
+                e.CellStyle.ForeColor = Color.FromArgb(21, 128, 61);
+            }
+            else if (status == "Failed")
+            {
+                e.Value = "失败";
+                e.CellStyle.BackColor = Color.FromArgb(254, 226, 226);
+                e.CellStyle.ForeColor = Color.FromArgb(185, 28, 28);
+            }
+            else if (status == "Launched")
+            {
+                e.Value = "已弹窗";
+                e.CellStyle.BackColor = Color.FromArgb(255, 237, 213);
+                e.CellStyle.ForeColor = Color.FromArgb(194, 65, 12);
+            }
+            else if (status == "Skipped")
+            {
+                e.Value = "已跳过";
+                e.CellStyle.BackColor = Color.FromArgb(226, 232, 240);
+                e.CellStyle.ForeColor = Color.FromArgb(71, 85, 105);
+            }
+            e.FormattingApplied = true;
+        }
+
+        private void GridCellToolTipTextNeeded(object sender, DataGridViewCellToolTipTextNeededEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.RowIndex >= grid.Rows.Count) return;
+            CleanupResult result = grid.Rows[e.RowIndex].DataBoundItem as CleanupResult;
+            if (result == null) return;
+            e.ToolTipText =
+                "恢复对象：" + result.Title + Environment.NewLine +
+                "处理结果：" + result.Message + Environment.NewLine +
+                "技术位置：" + result.TechnicalLocation + Environment.NewLine +
+                "备份文件：" + result.Backup;
+        }
+
+        private static void ConfigureRecoveryButton(Button button, string text, Color color)
+        {
+            button.Text = text;
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.BackColor = color;
+            button.ForeColor = Color.White;
+            button.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+        }
+
+        private sealed class BatchListItem
+        {
+            public readonly CleanupBatch Batch;
+            public readonly string Title;
+            public readonly string Subtitle;
+
+            public BatchListItem(CleanupBatch batch, string title, string subtitle)
+            {
+                Batch = batch;
+                Title = title;
+                Subtitle = subtitle;
+            }
+
+            public override string ToString()
+            {
+                return Title;
             }
         }
     }
