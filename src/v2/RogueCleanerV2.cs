@@ -23,15 +23,18 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.1.0")]
-[assembly: AssemblyFileVersion("2.0.1.0")]
+[assembly: AssemblyVersion("2.0.2.0")]
+[assembly: AssemblyFileVersion("2.0.2.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.1";
+        public const string Version = "2.0.2";
+        public const string AuthorName = "aakk007";
+        public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
+        public const string AuthorGitHubUrl = "https://github.com/aakk007";
         public const string Repository = "https://github.com/aakk007/RogueCleaner";
         public const string ReleasesUrl = "https://github.com/aakk007/RogueCleaner/releases";
         public const string LatestApiUrl = "https://api.github.com/repos/aakk007/RogueCleaner/releases/latest";
@@ -52,14 +55,18 @@ namespace RogueCleanerV2
             store.Ensure();
             Logger.Initialize(store);
             bool smoke = HasArg(args, "--scan-smoke");
+#if VALIDATION
             bool acceptance = HasArg(args, "--acceptance-test");
+#endif
 
             try
             {
+#if VALIDATION
                 if (acceptance)
                 {
                     return ValidationRunner.Run(store);
                 }
+#endif
                 if (smoke)
                 {
                     List<Finding> findings = new ScannerEngine().ScanAll(null);
@@ -1473,6 +1480,7 @@ namespace RogueCleanerV2
         }
     }
 
+#if VALIDATION
     internal sealed class ValidationReport
     {
         public string StartedAt { get; set; }
@@ -1983,6 +1991,8 @@ namespace RogueCleanerV2
         }
     }
 
+#endif
+
     internal sealed class MainForm : Form, IProgressSink
     {
         private readonly DataStore store;
@@ -1990,6 +2000,8 @@ namespace RogueCleanerV2
         private readonly DataGridView grid = new DataGridView();
         private readonly Label summaryLabel = new Label();
         private readonly Label statusLabel = new Label();
+        private readonly Label versionLabel = new Label();
+        private readonly LinkLabel authorLink = new LinkLabel();
         private readonly ProgressBar progress = new ProgressBar();
         private readonly Button scanButton = new Button();
         private readonly Button cleanButton = new Button();
@@ -2025,10 +2037,10 @@ namespace RogueCleanerV2
             root.Dock = DockStyle.Fill;
             root.RowCount = 4;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             Controls.Add(root);
 
             Panel header = new Panel();
@@ -2045,18 +2057,37 @@ namespace RogueCleanerV2
             title.Location = new Point(28, 20);
             header.Controls.Add(title);
 
+            versionLabel.Text = "v" + AppMeta.Version;
+            versionLabel.ForeColor = Color.White;
+            versionLabel.BackColor = Color.FromArgb(13, 148, 136);
+            versionLabel.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            versionLabel.TextAlign = ContentAlignment.MiddleCenter;
+            versionLabel.AutoSize = false;
+            versionLabel.Size = new Size(78, 28);
+            versionLabel.Location = new Point(title.Right + 14, 30);
+            header.Controls.Add(versionLabel);
+
             Label sub = new Label();
-            sub.Text = "v2 单文件预览：C# 多线程扫描，清理后复核，所有运行文件只进“流氓软件克星数据”。";
+            sub.Text = "单文件版：多线程扫描，清理后复核，运行数据只进“流氓软件克星数据”。";
             sub.ForeColor = Color.FromArgb(224, 242, 254);
             sub.AutoSize = true;
             sub.Location = new Point(32, 68);
             header.Controls.Add(sub);
 
+            TableLayoutPanel toolArea = new TableLayoutPanel();
+            toolArea.Dock = DockStyle.Fill;
+            toolArea.RowCount = 2;
+            toolArea.ColumnCount = 1;
+            toolArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            toolArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
+            toolArea.Padding = new Padding(18, 10, 18, 8);
+            root.Controls.Add(toolArea, 0, 1);
+
             FlowLayoutPanel actions = new FlowLayoutPanel();
             actions.Dock = DockStyle.Fill;
-            actions.Padding = new Padding(18, 12, 18, 6);
+            actions.Padding = new Padding(0);
             actions.WrapContents = false;
-            root.Controls.Add(actions, 0, 1);
+            toolArea.Controls.Add(actions, 0, 0);
 
             ConfigureButton(scanButton, "开始扫描", Color.FromArgb(14, 116, 144));
             ConfigureButton(cleanButton, "清理勾选", Color.FromArgb(220, 38, 38));
@@ -2082,6 +2113,12 @@ namespace RogueCleanerV2
             searchBox.Width = 260;
             searchBox.Height = 32;
             actions.Controls.Add(searchBox);
+
+            progress.Dock = DockStyle.Fill;
+            progress.Margin = new Padding(0, 0, 0, 0);
+            progress.Style = ProgressBarStyle.Continuous;
+            progress.Visible = false;
+            toolArea.Controls.Add(progress, 0, 1);
 
             TableLayoutPanel body = new TableLayoutPanel();
             body.Dock = DockStyle.Fill;
@@ -2112,6 +2149,7 @@ namespace RogueCleanerV2
             grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(15, 118, 110);
             grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
             grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             grid.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
             grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 251, 241);
             grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(15, 23, 42);
@@ -2124,21 +2162,34 @@ namespace RogueCleanerV2
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserImpact", HeaderText = "影响说明", Width = 390, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ActionText", HeaderText = "工具会怎么处理", Width = 210, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "TechnicalLocation", HeaderText = "技术位置", Width = 420, ReadOnly = true });
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            }
             body.Controls.Add(grid, 0, 1);
 
-            Panel footer = new Panel();
+            TableLayoutPanel footer = new TableLayoutPanel();
             footer.Dock = DockStyle.Fill;
             footer.BackColor = Color.FromArgb(226, 232, 240);
+            footer.ColumnCount = 2;
+            footer.RowCount = 1;
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
             root.Controls.Add(footer, 0, 3);
             statusLabel.Dock = DockStyle.Fill;
             statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            statusLabel.Padding = new Padding(18, 0, 170, 0);
+            statusLabel.Padding = new Padding(18, 0, 0, 0);
             statusLabel.Text = "就绪。数据目录：" + store.Root;
-            footer.Controls.Add(statusLabel);
-            progress.Dock = DockStyle.Right;
-            progress.Width = 150;
-            progress.Style = ProgressBarStyle.Continuous;
-            footer.Controls.Add(progress);
+            footer.Controls.Add(statusLabel, 0, 0);
+            authorLink.Dock = DockStyle.Fill;
+            authorLink.Text = "作者: " + AppMeta.AuthorName;
+            authorLink.TextAlign = ContentAlignment.MiddleRight;
+            authorLink.Padding = new Padding(0, 0, 18, 0);
+            authorLink.LinkColor = Color.FromArgb(15, 118, 110);
+            authorLink.ActiveLinkColor = Color.FromArgb(234, 88, 12);
+            authorLink.VisitedLinkColor = Color.FromArgb(15, 118, 110);
+            footer.Controls.Add(authorLink, 1, 0);
 
             flushTimer = new System.Windows.Forms.Timer();
             flushTimer.Interval = 200;
@@ -2154,6 +2205,8 @@ namespace RogueCleanerV2
             searchBox.TextChanged += delegate { ApplyFilter(); };
             rows.ListChanged += delegate { UpdateSummary(); };
             grid.CellToolTipTextNeeded += GridCellToolTipTextNeeded;
+            grid.CellFormatting += GridCellFormatting;
+            authorLink.LinkClicked += delegate { OpenAuthorLinks(); };
             grid.CurrentCellDirtyStateChanged += delegate
             {
                 if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
@@ -2178,11 +2231,79 @@ namespace RogueCleanerV2
             Finding finding = grid.Rows[e.RowIndex].DataBoundItem as Finding;
             if (finding == null) return;
             e.ToolTipText =
-                "用户会看到：" + finding.UserVisibleName + Environment.NewLine +
-                "影响：" + finding.UserImpact + Environment.NewLine +
-                "处理：" + finding.ActionText + Environment.NewLine +
-                "位置：" + finding.TechnicalLocation + Environment.NewLine +
-                "证据：" + finding.Evidence;
+                WrapTooltipLine("用户会看到：", finding.UserVisibleName) + Environment.NewLine +
+                WrapTooltipLine("影响：", finding.UserImpact) + Environment.NewLine +
+                WrapTooltipLine("处理：", finding.ActionText) + Environment.NewLine +
+                WrapTooltipLine("位置：", finding.TechnicalLocation) + Environment.NewLine +
+                WrapTooltipLine("证据：", finding.Evidence);
+        }
+
+        private void GridCellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            DataGridViewColumn column = grid.Columns[e.ColumnIndex];
+            if (!string.Equals(column.DataPropertyName, "Risk", StringComparison.OrdinalIgnoreCase)) return;
+            string risk = Convert.ToString(e.Value);
+            if (risk == "高")
+            {
+                e.CellStyle.BackColor = Color.FromArgb(254, 226, 226);
+                e.CellStyle.ForeColor = Color.FromArgb(185, 28, 28);
+            }
+            else if (risk == "中")
+            {
+                e.CellStyle.BackColor = Color.FromArgb(255, 237, 213);
+                e.CellStyle.ForeColor = Color.FromArgb(194, 65, 12);
+            }
+            else if (risk == "低")
+            {
+                e.CellStyle.BackColor = Color.FromArgb(220, 252, 231);
+                e.CellStyle.ForeColor = Color.FromArgb(21, 128, 61);
+            }
+            e.CellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        }
+
+        private static string WrapTooltipLine(string label, string value)
+        {
+            return WrapTooltipText(label + (value ?? string.Empty), 86);
+        }
+
+        private static string WrapTooltipText(string text, int width)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            StringBuilder builder = new StringBuilder();
+            int line = 0;
+            foreach (char c in text.Replace("\r", string.Empty))
+            {
+                if (c == '\n')
+                {
+                    builder.AppendLine();
+                    line = 0;
+                    continue;
+                }
+                if (line >= width)
+                {
+                    builder.AppendLine();
+                    line = 0;
+                }
+                builder.Append(c);
+                line++;
+                if (line >= 52 && (c == '\\' || c == '/' || c == ';' || c == '；' || c == '，' || c == '。'))
+                {
+                    builder.AppendLine();
+                    line = 0;
+                }
+            }
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void OpenAuthorLinks()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = AppMeta.Author52PojieUrl, UseShellExecute = true });
+                Process.Start(new ProcessStartInfo { FileName = AppMeta.AuthorGitHubUrl, UseShellExecute = true });
+            }
+            catch { }
         }
 
         private static void ConfigureButton(Button button, string text, Color color)
@@ -2311,6 +2432,8 @@ namespace RogueCleanerV2
             adminButton.Enabled = !busy && !AdminUtil.IsAdministrator();
             searchBox.Enabled = !busy;
             progress.Style = busy ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+            progress.MarqueeAnimationSpeed = busy ? 25 : 0;
+            progress.Visible = busy;
             progress.Value = busy ? 0 : 0;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             statusLabel.Text = status;

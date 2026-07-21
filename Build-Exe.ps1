@@ -1,6 +1,7 @@
 ﻿[CmdletBinding()]
 param(
-    [switch]$PackageOnly
+    [switch]$PackageOnly,
+    [switch]$ValidationBuild
 )
 
 Set-StrictMode -Version 2.0
@@ -73,6 +74,9 @@ if (!$PackageOnly) {
         '/reference:Microsoft.CSharp.dll',
         "/out:$exe"
     ) + $sources
+    if ($ValidationBuild) {
+        $cscArgs = @('/define:VALIDATION') + $cscArgs
+    }
     & $csc @cscArgs
     if ($LASTEXITCODE -ne 0) {
         throw "csc 构建失败，退出码 $LASTEXITCODE"
@@ -89,7 +93,6 @@ if (Test-Path -LiteralPath $resolvedDist) {
 New-Item -ItemType Directory -Path $resolvedDist -Force | Out-Null
 
 Copy-Item -LiteralPath $exe -Destination (Join-Path $resolvedDist '流氓软件克星.exe') -Force
-Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination (Join-Path $resolvedDist 'README.md') -Force
 if (!(Test-Path -LiteralPath $v2Src -PathType Container)) {
     if (!(Test-Path -LiteralPath $script -PathType Leaf)) {
         throw "缺少运行脚本：$script"

@@ -8,10 +8,10 @@ $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSComman
 $rar = 'C:\Program Files\WinRAR\Rar.exe'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $releaseRoot = Join-Path $root 'release'
-$oldDir = Join-Path $releaseRoot '旧版勿发'
+$oldDir = Join-Path $releaseRoot '_old'
 $workRoot = Join-Path $releaseRoot "package-$stamp"
-$sourceStage = Join-Path $workRoot '流氓软件克星-源码'
-$exeStage = Join-Path $workRoot '流氓软件克星-EXE透明发布版'
+$sourceStage = Join-Path $workRoot 'RogueCleaner-Source'
+$exeStage = Join-Path $workRoot 'RogueCleaner-Transparent'
 
 $resolvedRelease = [System.IO.Path]::GetFullPath($releaseRoot)
 $resolvedOld = [System.IO.Path]::GetFullPath($oldDir)
@@ -38,45 +38,28 @@ New-Item -ItemType Directory -Path $sourceStage -Force | Out-Null
 New-Item -ItemType Directory -Path $exeStage -Force | Out-Null
 
 foreach ($file in @(
-    'README.md',
     'LICENSE',
     'Build-Exe.ps1',
-    'Build-OneClick-Sfx.ps1',
     'Build-Release-Packages.ps1',
-    'RogueCleaner.ps1',
-    '.gitignore',
-    '先解压整个文件夹再运行.txt'
+    '.gitignore'
 )) {
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $sourceStage -Force
 }
 Copy-Item -LiteralPath (Join-Path $root 'src') -Destination $sourceStage -Recurse -Force
-foreach ($dir in @('docs', 'rules')) {
-    $dirPath = Join-Path $root $dir
-    if (Test-Path -LiteralPath $dirPath -PathType Container) {
-        Copy-Item -LiteralPath $dirPath -Destination $sourceStage -Recurse -Force
-    }
-}
 
 foreach ($file in @(
-    '流氓软件克星.exe',
-    'README.md'
+    '流氓软件克星.exe'
 )) {
     Copy-Item -LiteralPath (Join-Path $root "dist\流氓软件克星\$file") -Destination $exeStage -Force
 }
-foreach ($file in @('52pojie发布文案.md', '火绒误报回复.md', 'Win10Win11报错回复.md')) {
-    $releaseFile = Join-Path $releaseRoot $file
-    if (Test-Path -LiteralPath $releaseFile -PathType Leaf) {
-        Copy-Item -LiteralPath $releaseFile -Destination $exeStage -Force
-    }
-}
 
-$sourceArchive = Join-Path $releaseRoot "流氓软件克星_源码_$stamp.rar"
-$exeArchive = Join-Path $releaseRoot "流氓软件克星_EXE透明发布版_$stamp.rar"
+$sourceArchive = Join-Path $releaseRoot "RogueCleaner-Source-v2.0.2-$stamp.rar"
+$exeArchive = Join-Path $releaseRoot "RogueCleaner-Transparent-v2.0.2-$stamp.rar"
 Push-Location $workRoot
 try {
-    & $rar a -r -m5 -idq $sourceArchive '流氓软件克星-源码'
+    & $rar a -r -m5 -idq $sourceArchive 'RogueCleaner-Source'
     if ($LASTEXITCODE -ne 0) { throw "源码 RAR 打包失败，退出码 $LASTEXITCODE" }
-    & $rar a -r -m5 -idq $exeArchive '流氓软件克星-EXE透明发布版'
+    & $rar a -r -m5 -idq $exeArchive 'RogueCleaner-Transparent'
     if ($LASTEXITCODE -ne 0) { throw "EXE RAR 打包失败，退出码 $LASTEXITCODE" }
 }
 finally {

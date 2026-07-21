@@ -134,7 +134,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Build-Exe.ps1
 dist\流氓软件克星\流氓软件克星.exe
 ```
 
-v2 发布目录只包含 exe 和 README，不再包含运行必需的 `.ps1` 或规则目录。
+v2 发布目录只包含 exe，不再包含 `.md`、`.ps1` 或规则目录。
 
 开发烟测：
 
@@ -144,10 +144,11 @@ v2 发布目录只包含 exe 和 README，不再包含运行必需的 `.ps1` 或
 
 这个参数只扫描并写报告，不弹 GUI，不执行清理。
 
-发布前清理验收：
+发布前清理验收需单独编译验证版，正式发布版不带验收器，减少安全软件启发式误报：
 
 ```powershell
-.\流氓软件克星.exe --acceptance-test
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Build-Exe.ps1 -ValidationBuild
+.\dist\流氓软件克星\流氓软件克星.exe --acceptance-test
 ```
 
 这个参数会创建带 `CodexRogueCleanerTest` 前缀的模拟右键菜单、开机启动、浏览器宿主、文件打开方式、计划任务和服务项，调用正式扫描/清理/恢复核心，再写入验收报告。

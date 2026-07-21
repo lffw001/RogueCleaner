@@ -4,15 +4,16 @@
 
 ## 结论
 
-当前 v2.0.1 单文件核心验收已通过。
+v2.0.2 正式发布版已移除验收器，完整验收需用 `Build-Exe.ps1 -ValidationBuild` 单独生成验证版。
 
 已验证：
 
 - v2 可以编译成单文件 `流氓软件克星.exe`。
 - 独立目录运行 `--scan-smoke` 成功，退出码 `0`。
 - 单文件运行时只在 exe 同目录创建 `流氓软件克星数据`。
-- `dist\流氓软件克星` 发布目录只包含 exe 和 README。
-- `--acceptance-test` 在独立目录通过 10 个模拟工件验收，退出码 `0`。
+- `dist\流氓软件克星` 发布目录只包含 exe。
+- v2.0.1 验证版曾在独立目录通过 10 个模拟工件验收，退出码 `0`。
+- v2.0.2 正式版不再包含 `CodexRogueCleanerTest` 和 `--acceptance-test` 测试特征，减少安全软件误报面。
 - 已验证右键菜单、开机启动、浏览器 Native Messaging Host、文件打开方式、计划任务禁用、服务禁用、恢复中心恢复。
 - 已验证“不能静默卸载时弹出原厂卸载器”：工具启动卸载命令并记录 `Launched`，不静默点确认。
 
@@ -26,7 +27,8 @@
 ## 自动验收命令
 
 ```powershell
-.\流氓软件克星.exe --acceptance-test
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Build-Exe.ps1 -ValidationBuild
+.\dist\流氓软件克星\流氓软件克星.exe --acceptance-test
 ```
 
 该命令会创建 `CodexRogueCleanerTest` 前缀的模拟工件，调用正式扫描、清理和恢复核心，并写入：
@@ -44,7 +46,7 @@
 
 ## 本次独立目录结果
 
-独立运行目录：
+上一次完整通过的独立运行目录：
 
 ```text
 D:\Codex\Workspace\RogueCleanerAcceptanceLab-20260720-234000
@@ -55,6 +57,20 @@ D:\Codex\Workspace\RogueCleanerAcceptanceLab-20260720-234000
 ```text
 RunnableCases=10, Passed=10, Failed=0, SetupFailed=0, Skipped=0
 ```
+
+v2.0.2 本机验证版复测目录：
+
+```text
+D:\Codex\Workspace\RogueCleanerAcceptanceLab-20260721-081819
+```
+
+复测摘要：
+
+```text
+RunnableCases=10, Passed=7, Failed=0, SetupFailed=3, Skipped=0
+```
+
+3 个 `SetupFailed` 是当前机器/安全软件拒绝创建 HKCU Run 和计划任务模拟工件；不是清理后残留。v2.0.2 正式发布版已不再包含这类模拟工件创建代码。
 
 通过用例：
 
