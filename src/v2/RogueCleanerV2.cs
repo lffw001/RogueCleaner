@@ -24,15 +24,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.8.0")]
-[assembly: AssemblyFileVersion("2.0.8.0")]
+[assembly: AssemblyVersion("2.0.9.0")]
+[assembly: AssemblyFileVersion("2.0.9.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.8";
+        public const string Version = "2.0.9";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -205,9 +205,23 @@ namespace RogueCleanerV2
             get { return !string.Equals(ActionKind, "ReportOnly", StringComparison.OrdinalIgnoreCase); }
         }
 
+        public string RiskDisplay
+        {
+            get { return CanClean ? Risk : "仅提示"; }
+        }
+
         public bool BulkSelectable
         {
             get { return CanClean && !string.Equals(ActionKind, "InvokeUninstaller", StringComparison.OrdinalIgnoreCase); }
+        }
+
+        public string SelectionHint
+        {
+            get
+            {
+                if (CanClean) return "可勾选：工具会先备份，再按“工具会怎么处理”执行。";
+                return "不可勾选：" + ReportOnlyActionText();
+            }
         }
 
         public string ActionText
@@ -220,8 +234,17 @@ namespace RogueCleanerV2
                 if (string.Equals(ActionKind, "DisableService", StringComparison.OrdinalIgnoreCase)) return "备份状态后禁用服务";
                 if (string.Equals(ActionKind, "DisableScheduledTask", StringComparison.OrdinalIgnoreCase)) return "备份状态后禁用计划任务";
                 if (string.Equals(ActionKind, "InvokeUninstaller", StringComparison.OrdinalIgnoreCase)) return "弹出卸载器，用户自己确认";
-                return "仅提示，不一键动默认程序";
+                return ReportOnlyActionText();
             }
+        }
+
+        private string ReportOnlyActionText()
+        {
+            string category = Category ?? string.Empty;
+            if (category.IndexOf("默认打开程序", StringComparison.OrdinalIgnoreCase) >= 0) return "仅提示：这是双击默认打开方式，不替用户改默认应用";
+            if (category.IndexOf("卸载入口", StringComparison.OrdinalIgnoreCase) >= 0) return "仅提示：没有可靠卸载命令，不硬删主程序";
+            if (category.IndexOf("正在运行", StringComparison.OrdinalIgnoreCase) >= 0) return "仅提示：不强杀正在运行的进程";
+            return "仅提示：为避免误伤，不参与一键清理";
         }
 
         private void OnPropertyChanged(string name)
@@ -940,8 +963,9 @@ namespace RogueCleanerV2
             int score = baseScore + RuleCatalog.VendorBoost(text);
             Finding finding = new Finding();
             finding.Selected = false;
-            finding.Risk = score >= 80 ? "高" : (score >= 55 ? "中" : "低");
-            finding.Score = score;
+            bool reportOnly = string.Equals(target.Kind, "ReportOnly", StringComparison.OrdinalIgnoreCase);
+            finding.Risk = reportOnly ? "低" : (score >= 80 ? "高" : (score >= 55 ? "中" : "低"));
+            finding.Score = reportOnly ? Math.Min(score, 20) : score;
             finding.Vendor = RuleCatalog.ResolveVendor(text);
             finding.Category = category;
             finding.UserVisibleName = Clean(title);
@@ -2589,10 +2613,11 @@ namespace RogueCleanerV2
             grid.DataSource = rows;
             grid.AllowUserToAddRows = false;
             grid.AllowUserToDeleteRows = false;
+            grid.ReadOnly = true;
             grid.RowHeadersVisible = false;
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             grid.MultiSelect = true;
-            grid.EditMode = DataGridViewEditMode.EditOnEnter;
+            grid.EditMode = DataGridViewEditMode.EditProgrammatically;
             grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             grid.RowTemplate.Height = 34;
             grid.ColumnHeadersHeight = 38;
@@ -2607,7 +2632,7 @@ namespace RogueCleanerV2
             grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(15, 23, 42);
             grid.ShowCellToolTips = true;
             grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = "选", Width = 45, TrueValue = true, FalseValue = false, ThreeState = false, SortMode = DataGridViewColumnSortMode.NotSortable });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Risk", HeaderText = "风险", Width = 60, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "RiskDisplay", HeaderText = "风险", Width = 68, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", Width = 130, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "在哪里冒出来", Width = 155, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserVisibleName", HeaderText = "用户会看到什么", Width = 240, ReadOnly = true });
@@ -2658,31 +2683,40 @@ namespace RogueCleanerV2
             rows.ListChanged += delegate { UpdateSummary(); };
             grid.CellToolTipTextNeeded += GridCellToolTipTextNeeded;
             grid.CellFormatting += GridCellFormatting;
-            grid.CellMouseUp += delegate(object sender, DataGridViewCellMouseEventArgs e)
-            {
-                if (e.RowIndex >= 0 && e.ColumnIndex == 0)
-                {
-                    grid.EndEdit();
-                    UpdateSummary();
-                }
-            };
+            grid.CellClick += GridCellClick;
+            grid.KeyDown += GridKeyDown;
             authorLink.LinkClicked += delegate { OpenAuthorLinks(); };
-            grid.CurrentCellDirtyStateChanged += delegate
+        }
+
+        private void GridCellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex == 0) ToggleRowSelection(e.RowIndex);
+        }
+
+        private void GridKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Space || grid.CurrentCell == null || grid.CurrentCell.RowIndex < 0) return;
+            ToggleRowSelection(grid.CurrentCell.RowIndex);
+            e.Handled = true;
+        }
+
+        private void ToggleRowSelection(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return;
+            Finding finding = grid.Rows[rowIndex].DataBoundItem as Finding;
+            if (finding == null) return;
+            if (!finding.CanClean)
             {
-                if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            };
-            grid.CellValueChanged += delegate(object sender, DataGridViewCellEventArgs e)
-            {
-                if (e.RowIndex < 0 || e.ColumnIndex != 0) return;
-                Finding finding = grid.Rows[e.RowIndex].DataBoundItem as Finding;
-                if (finding != null && finding.Selected && !finding.CanClean)
-                {
-                    finding.Selected = false;
-                    statusLabel.Text = "这项是默认打开程序归属，只提示，不参与一键清理。";
-                    grid.Refresh();
-                }
+                finding.Selected = false;
+                statusLabel.Text = finding.SelectionHint + " 鼠标悬停这一行可以看完整原因。";
+                grid.InvalidateRow(rowIndex);
                 UpdateSummary();
-            };
+                return;
+            }
+            finding.Selected = !finding.Selected;
+            statusLabel.Text = (finding.Selected ? "已勾选：" : "已取消：") + finding.UserVisibleName;
+            grid.InvalidateRow(rowIndex);
+            UpdateSummary();
         }
 
         private void GridCellToolTipTextNeeded(object sender, DataGridViewCellToolTipTextNeededEventArgs e)
@@ -2691,6 +2725,7 @@ namespace RogueCleanerV2
             Finding finding = grid.Rows[e.RowIndex].DataBoundItem as Finding;
             if (finding == null) return;
             e.ToolTipText =
+                WrapTooltipLine("勾选：", finding.SelectionHint) + Environment.NewLine +
                 WrapTooltipLine("用户会看到：", finding.UserVisibleName) + Environment.NewLine +
                 WrapTooltipLine("影响：", finding.UserImpact) + Environment.NewLine +
                 WrapTooltipLine("处理：", finding.ActionText) + Environment.NewLine +
@@ -2701,10 +2736,27 @@ namespace RogueCleanerV2
         private void GridCellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            Finding finding = grid.Rows[e.RowIndex].DataBoundItem as Finding;
             DataGridViewColumn column = grid.Columns[e.ColumnIndex];
-            if (!string.Equals(column.DataPropertyName, "Risk", StringComparison.OrdinalIgnoreCase)) return;
+            if (finding != null && !finding.CanClean)
+            {
+                e.CellStyle.BackColor = Color.FromArgb(248, 250, 252);
+                e.CellStyle.ForeColor = Color.FromArgb(100, 116, 139);
+                e.CellStyle.SelectionBackColor = Color.FromArgb(226, 232, 240);
+                e.CellStyle.SelectionForeColor = Color.FromArgb(51, 65, 85);
+            }
+            if (!string.Equals(column.DataPropertyName, "RiskDisplay", StringComparison.OrdinalIgnoreCase))
+            {
+                e.CellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                return;
+            }
             string risk = Convert.ToString(e.Value);
-            if (risk == "高")
+            if (risk == "仅提示")
+            {
+                e.CellStyle.BackColor = Color.FromArgb(241, 245, 249);
+                e.CellStyle.ForeColor = Color.FromArgb(71, 85, 105);
+            }
+            else if (risk == "高")
             {
                 e.CellStyle.BackColor = Color.FromArgb(254, 226, 226);
                 e.CellStyle.ForeColor = Color.FromArgb(185, 28, 28);
@@ -2816,7 +2868,7 @@ namespace RogueCleanerV2
             List<Finding> selected = rows.Where(delegate(Finding f) { return f.Selected && f.CanClean; }).ToList();
             if (selected.Count == 0)
             {
-                MessageBox.Show(reportOnly > 0 ? "你勾到的是“只提示”项目，这类默认打开程序不参与一键清理。" : "还没勾选任何可清理项目。", AppMeta.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(reportOnly > 0 ? "你勾到的是“仅提示”项目。默认打开程序、无可靠卸载命令或正在运行的进程不会参与一键清理，避免误改默认应用或硬删主程序。" : "还没勾选任何可清理项目。", AppMeta.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (selected.Any(delegate(Finding f) { return f.RequiresAdmin; }) && !AdminUtil.IsAdministrator())
@@ -2901,12 +2953,13 @@ namespace RogueCleanerV2
 
         private void UpdateSummary()
         {
-            int selected = rows.Count(delegate(Finding f) { return f.Selected; });
-            int high = rows.Count(delegate(Finding f) { return f.Risk == "高"; });
-            int medium = rows.Count(delegate(Finding f) { return f.Risk == "中"; });
-            int low = rows.Count(delegate(Finding f) { return f.Risk == "低"; });
+            int selected = rows.Count(delegate(Finding f) { return f.Selected && f.CanClean; });
+            int high = rows.Count(delegate(Finding f) { return f.CanClean && f.Risk == "高"; });
+            int medium = rows.Count(delegate(Finding f) { return f.CanClean && f.Risk == "中"; });
+            int low = rows.Count(delegate(Finding f) { return f.CanClean && f.Risk == "低"; });
             int reportOnly = rows.Count(delegate(Finding f) { return !f.CanClean; });
-            summaryLabel.Text = "发现 " + rows.Count + " 项，已勾选 " + selected + " 项。高风险 " + high + "，中风险 " + medium + "，低风险 " + low + "，仅提示 " + reportOnly + "。";
+            int cleanable = high + medium + low;
+            summaryLabel.Text = "发现 " + rows.Count + " 项，可清理 " + cleanable + " 项，已勾选 " + selected + " 项。高风险 " + high + "，中风险 " + medium + "，低风险 " + low + "，仅提示 " + reportOnly + "。";
         }
 
         private void SetAll(bool value)
@@ -2932,7 +2985,7 @@ namespace RogueCleanerV2
             {
                 Finding finding = row.DataBoundItem as Finding;
                 if (finding == null) continue;
-                string haystack = (finding.Risk + " " + finding.Vendor + " " + finding.Category + " " + finding.UserVisibleName + " " + finding.UserImpact + " " + finding.TechnicalLocation);
+                string haystack = (finding.RiskDisplay + " " + finding.Vendor + " " + finding.Category + " " + finding.UserVisibleName + " " + finding.UserImpact + " " + finding.ActionText + " " + finding.TechnicalLocation);
                 row.Visible = string.IsNullOrEmpty(text) || haystack.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
             }
             manager.ResumeBinding();
