@@ -53,8 +53,8 @@ foreach ($file in @(
     Copy-Item -LiteralPath (Join-Path $root "dist\流氓软件克星\$file") -Destination $exeStage -Force
 }
 
-$sourceArchive = Join-Path $releaseRoot "RogueCleaner-Source-v2.0.2-$stamp.rar"
-$exeArchive = Join-Path $releaseRoot "RogueCleaner-Transparent-v2.0.2-$stamp.rar"
+$sourceArchive = Join-Path $releaseRoot "RogueCleaner-Source-v2.0.3-$stamp.rar"
+$exeArchive = Join-Path $releaseRoot "RogueCleaner-Transparent-v2.0.3-$stamp.rar"
 Push-Location $workRoot
 try {
     & $rar a -r -m5 -idq $sourceArchive 'RogueCleaner-Source'

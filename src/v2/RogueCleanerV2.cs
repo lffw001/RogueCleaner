@@ -23,15 +23,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.2.0")]
-[assembly: AssemblyFileVersion("2.0.2.0")]
+[assembly: AssemblyVersion("2.0.3.0")]
+[assembly: AssemblyFileVersion("2.0.3.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.2";
+        public const string Version = "2.0.3";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -293,7 +293,7 @@ namespace RogueCleanerV2
         private static readonly VendorRule[] Vendors = new VendorRule[]
         {
             new VendorRule { Name = "360 系列", Snark = "右键桌面不够，还想住进开机启动。", Boost = 25, Patterns = new [] { "Qihoo", "Qihu", "奇虎", "360.cn", "360Safe", "360sd", "360rp", "360se", "360Chrome", "360zip", "360Desktop", "360DesktopLite", "360Wallpaper", "360AlbumViewer", "360AI图片", "360AI", "360Pic", "360KanPic", "360Image", "Safe360Ext", "SoftMgrExt", "AblumViewer", "AlbumViewer", "shell360ext", "QHActiveDefense", "ZhuDongFangYu", "QHWatchdog", "QHProtected", "QHWebProtection", "QHSafeTray", "360软件管家", "360安全卫士", "360压缩", "360浏览器", "360极速浏览器", "360看图" }, BadComponents = new [] { "Safe360Ext", "SoftMgrExt", "AblumViewerMenuExt", "AlbumViewerMenuExt", "ShellExt64.dll", "shell360ext64.dll", "360AI图片", "QHActiveDefense", "ZhuDongFangYu" } },
-            new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "kdocs", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "kdesktopshellext", "qkdesktopshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "WPS灵犀", "wpsLingxi", "lingxi", "旺仔", "Wangzai", "wpscenter", "wpsupdate", "WpsUpdateTask", "WPS Office Cloud Service", "wpscloudsvr", "ksomisc" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai", "wpscloudsvr" } },
+            new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS Office", "WPS.", "WPS_", "WPS-", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "kdocs", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "kdesktopshellext", "qkdesktopshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "WPS灵犀", "wpsLingxi", "lingxi", "旺仔", "Wangzai", "wpscenter", "wpsupdate", "WpsUpdateTask", "WPS Office Cloud Service", "wpscloudsvr", "ksomisc" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai", "wpscloudsvr" } },
             new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "BaiduNetdiskUnite", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskDesktopSync", "BaiduNetdiskSync", "BaiduNetdiskUtility", "BaiduNetdiskService", "BaiduNetdiskHost", "BaiduYun", "BaiduYunDetect", "YunShell", "YunShellExt", "YunDetectService", "cloudpic", "百度网盘看图", "百度网盘同步", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskUtility", "BaiduNetdiskService", "cloudpic.dll", "imageviewer" } },
             new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouImeMgr", "SogouFlash", "SogouTips", "SogouNews", "SogouPopup", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd", "SogouUpdate", "SogouComMgr", "SGTool", "PinyinUp" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop", "SogouPopup", "SogouNews", "SGImeGuard" } },
             new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "XLServicePlatform", "ThunderPlatform", "ThunderAgent", "ThunderStart", "ThunderBrowser", "XunleiBHO", "XunleiDownload", "XunleiMedia", "XLB", "XLLiveUD", "XLGameBox", "XMP", "TBCrash", "BrowserEngine", "迅雷下载助手" }, BadComponents = new [] { "XLService", "XLServicePlatform", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart", "XunleiBHO" } },
@@ -305,9 +305,9 @@ namespace RogueCleanerV2
             new VendorRule { Name = "国产浏览器/导航", Snark = "浏览器自己跑就行，别把下载、主页和启动项全包了。", Boost = 16, Patterns = new [] { "SogouExplorer", "搜狗高速浏览器", "QQBrowser", "360se", "360Chrome", "2345Explorer", "2345Browser", "Liebao", "猎豹浏览器", "CheetahBrowser", "Maxthon", "傲游", "UCBrowser", "UCBrowser", "TheWorld", "世界之窗", "BaiduBrowser", "百度浏览器" }, BadComponents = new [] { "SogouExplorer", "QQBrowser", "2345Explorer", "CheetahBrowser", "UCService", "BaiduBrowser" } },
             new VendorRule { Name = "Flash 中国特供组件", Snark = "Flash 都退役了，助手还想在后台上班。", Boost = 22, Patterns = new [] { "FlashHelperService", "Flash Center", "FlashCenter", "Flash大厅", "FlashHelper", "FlashRepair", "FlashService", "flash.cn" }, BadComponents = new [] { "FlashHelperService", "FlashCenter", "FlashHelper" } },
             new VendorRule { Name = "手机助手/设备助手", Snark = "连一次手机，后台服务倒是记住一辈子。", Boost = 12, Patterns = new [] { "i4Tools", "爱思助手", "Aisi", "PP助手", "PPAssistant", "91助手", "91Assistant", "Wandoujia", "豌豆荚", "BaiduMobile", "TencentMobileManager", "应用宝", "HiSuite", "华为手机助手", "MiPhoneAssistant", "小米助手" }, BadComponents = new [] { "i4Tools", "PPAssistant", "91Assistant", "Wandoujia", "TencentMobileManager" } },
-            new VendorRule { Name = "国产影音/游戏大厅", Snark = "看个视频玩个游戏，不需要抢文件关联和开机席位。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Qiyi", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风", "Baofeng", "QQLive", "TencentVideo", "腾讯视频", "XunleiMedia", "XMP", "Bilibili", "bili", "芒果TV", "MangoTV", "WeGame", "SteamChina" }, BadComponents = new [] { "iQIYI", "Qiyi", "Youku", "Kugou", "Kuwo", "PPTV", "Baofeng", "QQLive", "TencentVideo" } },
+            new VendorRule { Name = "国产影音/游戏大厅", Snark = "看个视频玩个游戏，不需要抢文件关联和开机席位。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Qiyi", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风", "Baofeng", "QQLive", "TencentVideo", "腾讯视频", "XunleiMedia", "XMP", "Bilibili", "芒果TV", "MangoTV", "WeGame", "SteamChina" }, BadComponents = new [] { "iQIYI", "Qiyi", "Youku", "Kugou", "Kuwo", "PPTV", "Baofeng", "QQLive", "TencentVideo" } },
             new VendorRule { Name = "PDF/办公捆绑工具", Snark = "读个 PDF，也别顺手接管全系统打开方式。", Boost = 10, Patterns = new [] { "JisuPDF", "极速PDF", "SwiftPDF", "迅捷PDF", "Foxit", "福昕", "CAJViewer", "CAJ", "PDFReader", "PDFSuite", "PDFMaster", "嗨格式", "HiFormat" }, BadComponents = new [] { "JisuPDF", "SwiftPDF", "PDFMaster", "HiFormat" } },
-            new VendorRule { Name = "预装管家/厂商助手", Snark = "出厂自带不等于可以偷偷常驻。", Boost = 8, Patterns = new [] { "LenovoUtility", "LenovoVantage", "联想电脑管家", "LenovoPcManager", "Huawei PC Manager", "华为电脑管家", "HonorPCManager", "荣耀电脑管家", "MiService", "小米电脑管家", "ASUS", "MyASUS", "AcerCare", "Dell SupportAssist" }, BadComponents = new [] { "LenovoPcManager", "Huawei PC Manager", "HonorPCManager", "MiService", "SupportAssist" } },
+            new VendorRule { Name = "预装管家/厂商助手", Snark = "出厂自带不等于可以偷偷常驻。", Boost = 8, Patterns = new [] { "LenovoUtility", "LenovoVantage", "联想电脑管家", "LenovoPcManager", "Huawei PC Manager", "华为电脑管家", "HonorPCManager", "荣耀电脑管家", "MiService", "小米电脑管家", "MyASUS", "华硕电脑管家", "AcerCare", "Dell SupportAssist" }, BadComponents = new [] { "LenovoPcManager", "Huawei PC Manager", "HonorPCManager", "MiService", "SupportAssist" } },
             new VendorRule { Name = "弹窗广告/推广组件", Snark = "关掉没一会儿又弹，这类小广告最会装死。", Boost = 22, Patterns = new [] { "SogouNews", "SogouPopup", "SogouTips", "SogouAd", "SogouInputPop", "2345MiniPage", "MiniNews", "HotNews", "NewsPop", "PopNews", "PopWnd", "AdPop", "AdService", "AdPush", "WpsNotify", "KNotify", "BaiduTips", "BaiduNews", "QQBrowserMini", "KugouTips", "KuwoNews", "QiyiNews", "YoukuNews", "LuDaShiNews", "MasterLuMini", "DriverGeniusNews", "KuaiZipNews", "HaoZipMiniPage", "今日热点", "每日热点", "热点资讯", "迷你页", "推荐弹窗", "广告弹窗" }, BadComponents = new [] { "SogouNews", "SogouPopup", "2345MiniPage", "AdPop", "AdService", "WpsNotify", "BaiduTips", "LuDaShiNews", "KuaiZipNews" } },
             new VendorRule { Name = "守护/自动恢复组件", Snark = "你关它一次，它守护进程能把自己续上三回。", Boost = 20, Patterns = new [] { "QHWatchdog", "QHProtected", "QHActiveDefense", "SGImeGuard", "SogouImeBroker", "XLServicePlatform", "ThunderPlatform", "BaiduYunDetect", "YunDetectService", "BaiduNetdiskUtility", "QQProtect", "QQPCRTP", "2345Protect", "2345Svc", "KSafeSvc", "KWatch", "LdsDaemon", "LdsSvc", "FlashHelperService", "FlashCenter", "DriverGeniusDaemon", "DTLService", "LuDaShiDaemon" }, BadComponents = new [] { "QHWatchdog", "QHProtected", "SGImeGuard", "XLServicePlatform", "BaiduYunDetect", "QQProtect", "2345Protect", "KSafeSvc", "LdsDaemon", "FlashHelperService" } }
         };
@@ -562,8 +562,8 @@ namespace RogueCleanerV2
                             string appliesTo = ReadString(child, "AppliesTo");
                             string command = ReadDefault(target, "command");
                             string clsidText = ResolveClsidRegistration(childName, display, explorerHandler, commandStateHandler);
-                            string title = Join(childName, display, mui, explorerHandler, commandStateHandler);
-                            string text = Join(title, command, icon, appliesTo, clsidText, target.SubKey);
+                            string title = FriendlyContextMenuTitle(target.SubKey, childName, display, mui, explorerHandler, commandStateHandler, clsidText);
+                            string text = Join(title, childName, display, mui, explorerHandler, commandStateHandler, command, icon, appliesTo, clsidText, target.SubKey);
                             if (!RuleCatalog.IsKnownVendor(text)) continue;
                             list.Add(NewFinding("右键菜单", title, DescribeContextMenu(target.SubKey, title), target, text, 18));
                         }
@@ -589,7 +589,8 @@ namespace RogueCleanerV2
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryValue";
                         target.ValueName = valueName;
-                        list.Add(NewFinding("开机启动", valueName, "开机后会自动启动：" + FriendlyProgram(valueName, value), target, text, 28));
+                        string title = FriendlyStartupTitle(text, valueName, value);
+                        list.Add(NewFinding("开机启动", title, "开机后会自动启动：" + title, target, text, 28));
                     }
                 }
             }
@@ -635,7 +636,8 @@ namespace RogueCleanerV2
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryValue";
                         target.ValueName = valueName;
-                        list.Add(NewFinding("浏览器插件/外部宿主", valueName, "浏览器可能会加载这个外部扩展/策略：" + valueName, target, text, 35));
+                        string title = FriendlyBrowserTitle(text, valueName);
+                        list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35));
                     }
                     foreach (string childName in SafeSubKeyNames(key))
                     {
@@ -644,7 +646,8 @@ namespace RogueCleanerV2
                         target.SubKey = root.SubKey + "\\" + childName;
                         string text = Join(childName, root.SubKey);
                         if (!RuleCatalog.IsKnownVendor(text)) continue;
-                        list.Add(NewFinding("浏览器插件/外部宿主", childName, "浏览器可能会加载这个外部扩展/宿主：" + childName, target, text, 35));
+                        string title = FriendlyBrowserTitle(text, childName);
+                        list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35));
                     }
                 }
             }
@@ -726,9 +729,10 @@ namespace RogueCleanerV2
                         string name = Convert.ToString(process["Name"]);
                         string path = Convert.ToString(process["ExecutablePath"]);
                         string command = Convert.ToString(process["CommandLine"]);
+                        string identity = Join(name, path);
                         string text = Join(pid, name, path, command);
-                        if (!RuleCatalog.IsKnownVendor(text)) continue;
-                        if (!LooksLikeAdOrGuard(text)) continue;
+                        if (!RuleCatalog.IsKnownVendor(identity)) continue;
+                        if (!LooksLikeAdOrGuard(identity)) continue;
                         ActionTarget target = new ActionTarget { Kind = "ReportOnly", FilePath = Join(name, path, "PID=" + pid) };
                         Finding finding = NewFinding("正在运行/疑似弹窗守护", name, "后台正在运行，像是弹窗、推广、守护或自动恢复组件：" + Join(name, path), target, text, 12);
                         finding.Risk = "低";
@@ -766,7 +770,8 @@ namespace RogueCleanerV2
                                 if (classKey != null && RuleCatalog.IsKnownVendor(text))
                                 {
                                     classTarget.Kind = "ReportOnly";
-                                    list.Add(NewFinding("文件关联/默认打开程序", ext + " 默认打开：" + FriendlyHandler(defaultProgId), "双击/打开 " + ext + " 现在会交给：" + FriendlyHandler(defaultProgId) + "。这类属于主打开方式，只提示，不一键改。", classTarget, text, 8));
+                                    string title = ext + " 默认打开：" + FriendlyHandler(defaultProgId);
+                                    list.Add(NewFinding("文件关联/默认打开程序", title, "双击/打开 " + ext + " 现在会交给：" + FriendlyHandler(defaultProgId) + "。这类属于主打开方式，只提示，不一键改。", classTarget, text, 8));
                                 }
                             }
                         }
@@ -785,7 +790,8 @@ namespace RogueCleanerV2
                                     ActionTarget valueTarget = CopyTarget(subTarget);
                                     valueTarget.Kind = "DeleteRegistryValue";
                                     valueTarget.ValueName = valueName;
-                                    list.Add(NewFinding("文件关联/打开方式", ext + " 打开方式：" + valueName, "右键“打开方式”里会出现：" + FriendlyHandler(valueName) + "（影响 " + ext + " 文件）", valueTarget, text, 22));
+                                    string title = ext + " 打开方式：" + FriendlyHandler(valueName);
+                                    list.Add(NewFinding("文件关联/打开方式", title, "右键“打开方式”里会出现：" + FriendlyHandler(valueName) + "（影响 " + ext + " 文件）", valueTarget, text, 22));
                                 }
                             }
                         }
@@ -810,10 +816,12 @@ namespace RogueCleanerV2
                         string desc = Convert.ToString(svc["Description"]);
                         string mode = Convert.ToString(svc["StartMode"]);
                         if (mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (IsWindowsNativeService(name, display, path, desc)) continue;
                         string text = Join(name, display, path, desc, mode);
                         if (!RuleCatalog.IsKnownVendor(text)) continue;
                         ActionTarget target = new ActionTarget { Kind = "DisableService", ServiceName = name };
-                        Finding finding = NewFinding("后台服务", display, "后台服务会常驻或被系统拉起：" + display, target, text, 42);
+                        string title = FriendlyServiceTitle(text, name, display);
+                        Finding finding = NewFinding("后台服务", title, "后台服务会常驻或被系统拉起：" + title + "。原服务名：" + name, target, text, 42);
                         finding.RequiresAdmin = true;
                         list.Add(finding);
                     }
@@ -824,6 +832,20 @@ namespace RogueCleanerV2
                 Logger.Error("扫描服务失败", ex);
             }
             return list;
+        }
+
+        private static bool IsWindowsNativeService(string name, string display, string path, string desc)
+        {
+            string lowerPath = (Environment.ExpandEnvironmentVariables(path ?? string.Empty)).Trim().Trim('"').ToLowerInvariant();
+            if (lowerPath.IndexOf(@"\windows\system32\svchost.exe", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (lowerPath.IndexOf(@"\windows\syswow64\svchost.exe", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (lowerPath.StartsWith("svchost.exe", StringComparison.OrdinalIgnoreCase)) return true;
+
+            string text = Join(name, display, desc).ToLowerInvariant();
+            bool windowsName = text.IndexOf("windows ") >= 0 || text.IndexOf("microsoft ") >= 0 || text.IndexOf("windows ") >= 0;
+            bool systemPath = lowerPath.IndexOf(@"\windows\system32\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                lowerPath.IndexOf(@"\windows\syswow64\", StringComparison.OrdinalIgnoreCase) >= 0;
+            return systemPath && windowsName;
         }
 
         private List<Finding> ScanScheduledTasks()
@@ -866,7 +888,8 @@ namespace RogueCleanerV2
                 if (RuleCatalog.IsKnownVendor(text))
                 {
                     ActionTarget target = new ActionTarget { Kind = "DisableScheduledTask", TaskName = path };
-                    Finding finding = NewFinding("计划任务/定时拉起", name, "会按计划自动拉起：" + name, target, text, 30);
+                    string title = FriendlyTaskTitle(text, name);
+                    Finding finding = NewFinding("计划任务/定时拉起", title, "会按计划自动拉起：" + title + "。原任务名：" + name, target, text, 30);
                     finding.RequiresAdmin = true;
                     list.Add(finding);
                 }
@@ -1074,16 +1097,149 @@ namespace RogueCleanerV2
             return false;
         }
 
-        private static string DescribeContextMenu(string subKey, string title)
+        private static string FriendlyContextMenuTitle(string subKey, string childName, string display, string mui, string explorerHandler, string commandStateHandler, string clsidText)
+        {
+            string where = ContextWhereShort(subKey);
+            string candidate = FirstHumanText(display, mui);
+            if (!string.IsNullOrEmpty(candidate))
+            {
+                return where + "：会出现“" + candidate + "”";
+            }
+
+            string evidence = Join(childName, display, mui, explorerHandler, commandStateHandler, clsidText);
+            string feature = FriendlyContextMenuFeature(evidence);
+            return where + "：疑似会出现“" + feature + "”";
+        }
+
+        private static string FriendlyContextMenuFeature(string evidence)
+        {
+            string lower = (evidence ?? string.Empty).ToLowerInvariant();
+            if (lower.IndexOf("softmgrext") >= 0) return "360 软件管家右键菜单";
+            if (lower.IndexOf("safe360ext") >= 0) return "360 安全/扫描右键菜单";
+            if (lower.IndexOf("360ai") >= 0) return "360AI 图片右键菜单";
+            if (lower.IndexOf("360alb") >= 0 || lower.IndexOf("albumviewer") >= 0 || lower.IndexOf("ablumviewer") >= 0) return "360 看图右键菜单";
+            if (lower.IndexOf("qingshell") >= 0 || lower.IndexOf("qingnse") >= 0 || lower.IndexOf("kwpsshell") >= 0) return "WPS/金山相关右键菜单";
+            if (lower.IndexOf("kdesktop") >= 0 || lower.IndexOf("wpsdrive") >= 0) return "WPS 云文档/磁盘右键菜单";
+            if (lower.IndexOf("baidunetdisk") >= 0 || lower.IndexOf("baiduyun") >= 0 || lower.IndexOf("yunshell") >= 0) return "百度网盘右键菜单";
+            if (lower.IndexOf("sogou") >= 0) return "搜狗右键菜单";
+            if (lower.IndexOf("xunlei") >= 0 || lower.IndexOf("thunder") >= 0) return "迅雷右键菜单";
+            return ShortVendorName(evidence) + "右键菜单";
+        }
+
+        private static string FriendlyStartupTitle(string evidence, string name, string command)
+        {
+            string lower = Join(evidence, name, command).ToLowerInvariant();
+            if (lower.IndexOf("360safetray") >= 0) return "360 安全卫士托盘/防护入口";
+            if (lower.IndexOf("baiduyundetect") >= 0) return "百度网盘检测/同步启动项";
+            if (lower.IndexOf("sogou") >= 0 && LooksLikeAdOrGuard(lower)) return "搜狗弹窗/守护启动项";
+            if (lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷开机启动项";
+            string human = FirstHumanText(name, Path.GetFileNameWithoutExtension(ExtractExecutableName(command)));
+            return ShortVendorName(evidence) + "开机启动：" + (string.IsNullOrEmpty(human) ? "启动项" : human);
+        }
+
+        private static string FriendlyBrowserTitle(string evidence, string rawName)
+        {
+            string lower = Join(evidence, rawName).ToLowerInvariant();
+            if (lower.IndexOf("kingsoft") >= 0 || lower.IndexOf("wps") >= 0) return "WPS/金山浏览器扩展宿主";
+            if (lower.IndexOf("baidunetdisk") >= 0) return "百度网盘浏览器扩展宿主";
+            if (lower.IndexOf("sogou") >= 0) return "搜狗浏览器扩展/策略";
+            if (lower.IndexOf("xunlei") >= 0 || lower.IndexOf("thunder") >= 0) return "迅雷浏览器下载助手";
+            if (lower.IndexOf("360") >= 0 || lower.IndexOf("qihoo") >= 0) return "360 浏览器扩展/策略";
+            return ShortVendorName(evidence) + "浏览器扩展/宿主";
+        }
+
+        private static string FriendlyServiceTitle(string evidence, string name, string display)
+        {
+            string lower = Join(evidence, name, display).ToLowerInvariant();
+            if (lower.IndexOf("q360amppl") >= 0) return "360 安全防护后台服务";
+            if (lower.IndexOf("zhudongfangyu") >= 0 || lower.IndexOf("主动防御") >= 0 || lower.IndexOf("qhactivedefense") >= 0) return "360 主动防御后台服务";
+            if (lower.IndexOf("baidunetdiskutility") >= 0 || lower.IndexOf("baiduyundetect") >= 0) return "百度网盘检测/同步后台服务";
+            if (lower.IndexOf("wps office cloud service") >= 0 || lower.IndexOf("wpscloud") >= 0) return "WPS 云文档后台服务";
+            if (lower.IndexOf("sogousvc") >= 0 || lower.IndexOf("sgimeguard") >= 0) return "搜狗输入法守护/更新服务";
+            if (lower.IndexOf("xlservice") >= 0 || lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷后台/更新服务";
+            string human = FirstHumanText(display, name);
+            return ShortVendorName(evidence) + "后台服务" + (string.IsNullOrEmpty(human) ? string.Empty : "：" + human);
+        }
+
+        private static string FriendlyTaskTitle(string evidence, string name)
+        {
+            string lower = Join(evidence, name).ToLowerInvariant();
+            if (lower.IndexOf("wpsupdate") >= 0 || lower.IndexOf("wpswake") >= 0) return "WPS 更新/唤醒计划任务";
+            if (lower.IndexOf("getword") >= 0 || lower.IndexOf("wordsearch") >= 0 || lower.IndexOf("searchfetch") >= 0) return "360 划词/搜索计划任务";
+            if (lower.IndexOf("qihoo") >= 0 || lower.IndexOf("360") >= 0) return "360 定时扫描/拉起计划任务";
+            if (lower.IndexOf("baiduyun") >= 0 || lower.IndexOf("baidunetdisk") >= 0) return "百度网盘检测/同步计划任务";
+            if (lower.IndexOf("sogou") >= 0) return "搜狗更新/弹窗计划任务";
+            if (lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷更新/拉起计划任务";
+            string human = FirstHumanText(name);
+            return ShortVendorName(evidence) + "计划任务" + (string.IsNullOrEmpty(human) ? string.Empty : "：" + human);
+        }
+
+        private static string FirstHumanText(params string[] values)
+        {
+            foreach (string value in values)
+            {
+                string cleaned = Clean(value);
+                if (string.IsNullOrWhiteSpace(cleaned)) continue;
+                if (LooksTechnicalName(cleaned)) continue;
+                return cleaned;
+            }
+            return string.Empty;
+        }
+
+        private static bool LooksTechnicalName(string value)
+        {
+            string lower = (value ?? string.Empty).ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return true;
+            if (lower.IndexOf("{") >= 0 || lower.IndexOf("}") >= 0) return true;
+            if (lower.IndexOf(".dll") >= 0 || lower.IndexOf(".exe") >= 0 || lower.IndexOf("\\") >= 0 || lower.IndexOf("/") >= 0) return true;
+            string[] tokens = new string[] { "shellext", "safe360ext", "softmgrext", "contextmenu", "qingshell", "qingnse", "clsid", "com.", "native", "handler", "class" };
+            foreach (string token in tokens)
+            {
+                if (lower.IndexOf(token) >= 0) return true;
+            }
+            bool hasLetter = false;
+            bool hasChinese = false;
+            int digits = 0;
+            foreach (char c in value)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) hasLetter = true;
+                if (c >= 0x4e00 && c <= 0x9fff) hasChinese = true;
+                if (char.IsDigit(c)) digits++;
+            }
+            return hasLetter && !hasChinese && digits >= 3 && value.Length >= 8;
+        }
+
+        private static string ShortVendorName(string evidence)
+        {
+            string vendor = RuleCatalog.ResolveVendor(evidence);
+            if (vendor == "未知第三方") return "第三方软件";
+            return vendor.Replace(" 系列", string.Empty).Replace(" / ", "/");
+        }
+
+        private static string ExtractExecutableName(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) return string.Empty;
+            command = Environment.ExpandEnvironmentVariables(command.Trim().Trim('"'));
+            int exe = command.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            if (exe >= 0) return command.Substring(0, exe + 4).Trim('"');
+            int split = command.IndexOf(' ');
+            return split > 0 ? command.Substring(0, split).Trim('"') : command.Trim('"');
+        }
+
+        private static string ContextWhereShort(string subKey)
         {
             string lower = subKey.ToLowerInvariant();
-            string where = "资源管理器右键菜单";
-            if (lower.IndexOf("\\desktopbackground\\") >= 0 || lower.IndexOf("\\directory\\background\\") >= 0) where = "桌面/文件夹空白处右键";
-            else if (lower.IndexOf("\\drive\\") >= 0) where = "磁盘盘符右键";
-            else if (lower.IndexOf("\\directory\\") >= 0) where = "文件夹右键";
-            else if (lower.IndexOf("\\lnkfile\\") >= 0) where = "快捷方式右键";
-            else if (lower.IndexOf("\\*\\") >= 0) where = "普通文件右键";
-            return where + "会出现：" + Clean(title);
+            if (lower.IndexOf("\\desktopbackground\\") >= 0 || lower.IndexOf("\\directory\\background\\") >= 0) return "桌面/文件夹空白处右键";
+            if (lower.IndexOf("\\drive\\") >= 0) return "磁盘盘符右键";
+            if (lower.IndexOf("\\directory\\") >= 0) return "文件夹右键";
+            if (lower.IndexOf("\\lnkfile\\") >= 0) return "快捷方式右键";
+            if (lower.IndexOf("\\*\\") >= 0) return "普通文件右键";
+            return "资源管理器右键";
+        }
+
+        private static string DescribeContextMenu(string subKey, string title)
+        {
+            return Clean(title);
         }
 
         private static string FriendlyProgram(string name, string command)
@@ -1697,7 +1853,7 @@ namespace RogueCleanerV2
                 Vendor = "搜狗",
                 Area = "开机启动",
                 Needle = "CodexRogueCleanerTest_SogouInputPop",
-                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop", @"C:\CodexRogueCleanerTest\SogouInputPop.exe"); },
+                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop", BenignWindowsExecutable()); },
                 Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); },
                 Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); },
                 Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); }
@@ -1708,7 +1864,7 @@ namespace RogueCleanerV2
                 Vendor = "迅雷",
                 Area = "开机启动",
                 Needle = "CodexRogueCleanerTest_ThunderStart",
-                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart", @"C:\CodexRogueCleanerTest\ThunderStart.exe"); },
+                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart", BenignWindowsExecutable()); },
                 Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); },
                 Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); },
                 Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); }
@@ -1875,9 +2031,18 @@ namespace RogueCleanerV2
 
         private static void SetRegistryValue(string keyPath, string name, string value)
         {
-            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+            try
             {
-                key.SetValue(name, value ?? string.Empty);
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+                {
+                    key.SetValue(name, value ?? string.Empty);
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                string args = "add \"HKCU\\" + keyPath + "\" /v \"" + name + "\" /t REG_SZ /d \"" + (value ?? string.Empty) + "\" /f";
+                int exitCode = RunProcess("reg.exe", args);
+                if (exitCode != 0) throw;
             }
         }
 
@@ -1917,7 +2082,29 @@ namespace RogueCleanerV2
         private static void CreateScheduledTask()
         {
             string time = DateTime.Now.AddMinutes(10).ToString("HH:mm");
-            RunProcess("schtasks.exe", "/Create /SC DAILY /ST " + time + " /TN \"" + TaskName + "\" /TR \"cmd.exe /c exit 0\" /F");
+            RunProcess("schtasks.exe", "/Create /SC DAILY /ST " + time + " /TN \"" + TaskName + "\" /TR \"" + BenignWindowsExecutable() + "\" /F");
+            WaitUntil(delegate
+            {
+                bool enabled;
+                return TryGetScheduledTaskEnabled(TaskName, out enabled);
+            }, 5000);
+        }
+
+        private static bool WaitUntil(Func<bool> condition, int timeoutMs)
+        {
+            Stopwatch watch = Stopwatch.StartNew();
+            while (watch.ElapsedMilliseconds < timeoutMs)
+            {
+                if (condition()) return true;
+                Thread.Sleep(100);
+            }
+            return condition();
+        }
+
+        private static string BenignWindowsExecutable()
+        {
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            return Path.Combine(windows, "System32\\notepad.exe");
         }
 
         private static void CreateService()
@@ -2599,13 +2786,18 @@ namespace RogueCleanerV2
             {
                 using (WebClient client = new WebClient())
                 {
+                    client.Encoding = Encoding.UTF8;
                     client.Headers.Add("User-Agent", "RogueCleaner/" + AppMeta.Version);
+                    client.Headers.Add("Accept", "application/vnd.github+json");
                     string json = client.DownloadString(AppMeta.LatestApiUrl);
-                    JavaScriptSerializer serializer = new JavaScriptSerializer();
-                    Dictionary<string, object> release = serializer.DeserializeObject(json) as Dictionary<string, object>;
-                    string tag = release != null && release.ContainsKey("tag_name") ? Convert.ToString(release["tag_name"]) : string.Empty;
-                    string body = release != null && release.ContainsKey("body") ? Convert.ToString(release["body"]) : string.Empty;
-                    string html = release != null && release.ContainsKey("html_url") ? Convert.ToString(release["html_url"]) : AppMeta.ReleasesUrl;
+                    string tag = ExtractJsonString(json, "tag_name");
+                    string body = ExtractJsonString(json, "body");
+                    string html = ExtractJsonString(json, "html_url");
+                    if (string.IsNullOrWhiteSpace(tag))
+                    {
+                        throw new InvalidDataException("GitHub Release 信息缺少版本号。");
+                    }
+                    if (string.IsNullOrWhiteSpace(html)) html = AppMeta.ReleasesUrl;
                     string latest = tag.TrimStart('v', 'V');
                     if (IsNewer(latest, AppMeta.Version))
                     {
@@ -2623,7 +2815,7 @@ namespace RogueCleanerV2
                 Logger.Error("检查更新失败", ex);
                 if (showNoUpdate)
                 {
-                    MessageBox.Show(owner, "检查更新失败，可能是系统 TLS 或网络限制。\n\n可以手动打开：" + AppMeta.ReleasesUrl + "\n\n" + ex.Message, "检查更新失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(owner, "检查更新失败。\n\n可能是系统 TLS、代理或 GitHub API 限制。\n可以手动打开：" + AppMeta.ReleasesUrl + "\n\n错误：" + ConciseError(ex), "检查更新失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
         }
@@ -2641,6 +2833,80 @@ namespace RogueCleanerV2
             if (string.IsNullOrEmpty(body)) return string.Empty;
             body = body.Replace("\r", "").Trim();
             return body.Length > 300 ? body.Substring(0, 300) + "..." : body;
+        }
+
+        private static string ExtractJsonString(string json, string name)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return string.Empty;
+            string needle = "\"" + name + "\"";
+            int pos = json.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+            if (pos < 0) return string.Empty;
+            pos = json.IndexOf(':', pos + needle.Length);
+            if (pos < 0) return string.Empty;
+            pos++;
+            while (pos < json.Length && char.IsWhiteSpace(json[pos])) pos++;
+            if (pos >= json.Length || json[pos] != '"') return string.Empty;
+            pos++;
+
+            StringBuilder result = new StringBuilder();
+            bool escaped = false;
+            for (; pos < json.Length; pos++)
+            {
+                char c = json[pos];
+                if (escaped)
+                {
+                    if (c == 'n') result.Append('\n');
+                    else if (c == 'r') result.Append('\r');
+                    else if (c == 't') result.Append('\t');
+                    else if (c == 'b') result.Append('\b');
+                    else if (c == 'f') result.Append('\f');
+                    else if (c == 'u' && pos + 4 < json.Length)
+                    {
+                        string hex = json.Substring(pos + 1, 4);
+                        int code;
+                        if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out code))
+                        {
+                            result.Append((char)code);
+                            pos += 4;
+                        }
+                    }
+                    else
+                    {
+                        result.Append(c);
+                    }
+                    escaped = false;
+                    continue;
+                }
+
+                if (c == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+                if (c == '"') return result.ToString();
+                result.Append(c);
+            }
+            return string.Empty;
+        }
+
+        private static string ConciseError(Exception ex)
+        {
+            string message = ex == null ? string.Empty : ex.Message;
+            WebException web = ex as WebException;
+            if (web != null && web.Status != WebExceptionStatus.UnknownError)
+            {
+                message = "网络请求失败：" + web.Status;
+            }
+            message = (message ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
+            if (message.IndexOf("\"url\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("\"assets_url\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("\"tag_name\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("{", StringComparison.Ordinal) >= 0)
+            {
+                message = "GitHub 返回内容解析失败，详情已写入日志。";
+            }
+            if (string.IsNullOrWhiteSpace(message)) message = "未知错误，详情已写入日志。";
+            return message.Length > 160 ? message.Substring(0, 160) + "..." : message;
         }
     }
 
