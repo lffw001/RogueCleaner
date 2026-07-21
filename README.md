@@ -65,6 +65,7 @@ v2 改成 C# WinForms 单文件主程序：
 - 迅雷
 - 腾讯系
 - 2345 系列
+- Bandisoft / BandiView / Bandizip
 - 猎豹 / 金山毒霸
 - 驱动/硬件检测工具
 - 国产压缩/看图工具
