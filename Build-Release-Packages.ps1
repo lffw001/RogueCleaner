@@ -29,6 +29,10 @@ if (!(Test-Path -LiteralPath $rar -PathType Leaf)) {
 
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $oldDir -Force | Out-Null
+$staleDataDir = Join-Path $releaseRoot '流氓软件克星数据'
+if (Test-Path -LiteralPath $staleDataDir -PathType Container) {
+    Move-Item -LiteralPath $staleDataDir -Destination (Join-Path $oldDir "stale-runtime-data-$stamp") -Force
+}
 Get-ChildItem -LiteralPath $releaseRoot -File | Where-Object { $_.Extension -in @('.rar', '.exe') } | ForEach-Object {
     Move-Item -LiteralPath $_.FullName -Destination (Join-Path $oldDir $_.Name) -Force
 }
