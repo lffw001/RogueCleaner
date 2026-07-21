@@ -24,15 +24,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.9.0")]
-[assembly: AssemblyFileVersion("2.0.9.0")]
+[assembly: AssemblyVersion("2.0.10.0")]
+[assembly: AssemblyFileVersion("2.0.10.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.9";
+        public const string Version = "2.0.10";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -352,8 +352,9 @@ namespace RogueCleanerV2
             new VendorRule { Name = "360 系列", Snark = "右键桌面不够，还想住进开机启动。", Boost = 25, Patterns = new [] { "Qihoo", "Qihu", "奇虎", "360.cn", "360Safe", "360sd", "360rp", "360se", "360Chrome", "360zip", "360Desktop", "360DesktopLite", "360Wallpaper", "360AlbumViewer", "360AI图片", "360AI", "360Pic", "360KanPic", "360Image", "Safe360Ext", "SoftMgrExt", "AblumViewer", "AlbumViewer", "shell360ext", "QHActiveDefense", "ZhuDongFangYu", "QHWatchdog", "QHProtected", "QHWebProtection", "QHSafeTray", "360软件管家", "360安全卫士", "360压缩", "360浏览器", "360极速浏览器", "360看图" }, BadComponents = new [] { "Safe360Ext", "SoftMgrExt", "AblumViewerMenuExt", "AlbumViewerMenuExt", "ShellExt64.dll", "shell360ext64.dll", "360AI图片", "QHActiveDefense", "ZhuDongFangYu" } },
             new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS Office", "WPS.", "WPS_", "WPS-", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "kdocs", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "kdesktopshellext", "qkdesktopshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "WPS灵犀", "wpsLingxi", "lingxi", "旺仔", "Wangzai", "wpscenter", "wpsupdate", "WpsUpdateTask", "WPS Office Cloud Service", "wpscloudsvr", "ksomisc" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai", "wpscloudsvr" } },
             new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "BaiduNetdiskUnite", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskDesktopSync", "BaiduNetdiskSync", "BaiduNetdiskUtility", "BaiduNetdiskService", "BaiduNetdiskHost", "BaiduYun", "BaiduYunDetect", "YunShell", "YunShellExt", "YunDetectService", "cloudpic", "百度网盘看图", "百度网盘同步", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskUtility", "BaiduNetdiskService", "cloudpic.dll", "imageviewer" } },
+            new VendorRule { Name = "夸克 / 夸克网盘", Snark = "网盘上传和 PDF 转换也来抢右键，至少别披成迅雷的马甲。", Boost = 18, Patterns = new [] { "QuarkCloudDrive", "QuarkCloudDrive.upload", "QuarkCloudDrive.backup", "QuarkNetdisk", "QuarkDisk", "QuarkPan", "QuarkPDF", "QuarkConvert", "QuarkPC", "quark.cn", "pan.quark.cn", "vt.quark.cn", "quark-pc", "external_rclick", "夸克", "夸克网盘", "夸克浏览器", "上传到夸克网盘", "夸克网盘上传" }, BadComponents = new [] { "QuarkCloudDrive.upload", "QuarkCloudDrive.backup", "QuarkPDF", "QuarkConvert", "quark-pc", "external_rclick", "上传到夸克网盘", "PDF转换", "图片转PDF", "万能转换" } },
             new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouImeMgr", "SogouFlash", "SogouTips", "SogouNews", "SogouPopup", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd", "SogouUpdate", "SogouComMgr", "SGTool", "PinyinUp" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop", "SogouPopup", "SogouNews", "SGImeGuard" } },
-            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "XLServicePlatform", "ThunderPlatform", "ThunderAgent", "ThunderStart", "ThunderBrowser", "XunleiBHO", "XunleiDownload", "XunleiMedia", "XLB", "XLLiveUD", "XLGameBox", "XMP", "TBCrash", "BrowserEngine", "迅雷下载助手" }, BadComponents = new [] { "XLService", "XLServicePlatform", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart", "XunleiBHO" } },
+            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "XLServicePlatform", "ThunderPlatform", "ThunderAgent", "ThunderStart", "ThunderBrowser", "XunleiBHO", "XunleiDownload", "XunleiMedia", "Xunlei.XLB", "XLLiveUD", "XLGameBox", "XMP", "TBCrash", "BrowserEngine", "迅雷下载助手" }, BadComponents = new [] { "XLService", "XLServicePlatform", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart", "XunleiBHO" } },
             new VendorRule { Name = "腾讯系", Snark = "聊天归聊天，别顺手接管浏览器和启动项。", Boost = 12, Patterns = new [] { "Tencent", "腾讯", "QQBrowser", "QQPCMgr", "QQPCMGR", "QQProtect", "QQPCRTP", "QQRepair", "QQShellExt", "TXShell", "TIM.exe", "TIM\\", "WeChat", "微信", "企业微信", "WXWork", "TencentDocs", "腾讯文档", "QQLive", "QQMusic", "TBS", "QBCore", "QBUpdate", "电脑管家" }, BadComponents = new [] { "QQPCMgr", "QQBrowser", "QQProtect", "QQPCRTP", "QQShellExt", "TXShell", "QBUpdate" } },
             new VendorRule { Name = "2345 系列", Snark = "名字像门牌号，行为像钉子户。", Boost = 25, Patterns = new [] { "2345", "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345PicViewer", "2345Kantuwang", "2345Zip", "2345Safe", "2345Protect", "2345Svc", "2345MiniPage", "2345Browser", "2345看图王", "2345好压", "王牌" }, BadComponents = new [] { "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345Zip", "2345Protect", "2345MiniPage" } },
             new VendorRule { Name = "猎豹 / 金山毒霸", Snark = "安全软件当然能安全，问题是别把自己藏成常驻钉子。", Boost = 18, Patterns = new [] { "Cheetah", "猎豹", "Liebao", "Kingsoft Internet Security", "金山毒霸", "KSafe", "KSafeSvc", "KWatch", "kismain", "kavsrv", "KAV", "KSafeTray", "KMailMon", "KSoft" }, BadComponents = new [] { "KSafeSvc", "KWatch", "kavsrv", "KSafeTray", "Cheetah" } },
@@ -1180,6 +1181,11 @@ namespace RogueCleanerV2
             if (lower.IndexOf("qingshell") >= 0 || lower.IndexOf("qingnse") >= 0 || lower.IndexOf("kwpsshell") >= 0) return "WPS/金山相关右键菜单";
             if (lower.IndexOf("kdesktop") >= 0 || lower.IndexOf("wpsdrive") >= 0) return "WPS 云文档/磁盘右键菜单";
             if (lower.IndexOf("baidunetdisk") >= 0 || lower.IndexOf("baiduyun") >= 0 || lower.IndexOf("yunshell") >= 0) return "百度网盘右键菜单";
+            bool quarkEvidence = lower.IndexOf("quark") >= 0 || lower.IndexOf("夸克") >= 0 || lower.IndexOf("vt.quark.cn") >= 0 || lower.IndexOf("external_rclick") >= 0;
+            if (lower.IndexOf("quarkclouddrive.upload") >= 0 || lower.IndexOf("上传到夸克") >= 0) return "夸克网盘上传右键菜单";
+            if (lower.IndexOf("quarkclouddrive.backup") >= 0) return "夸克网盘备份右键菜单";
+            if (quarkEvidence && (lower.IndexOf("quarkpdf") >= 0 || lower.IndexOf("quarkconvert") >= 0 || lower.IndexOf("pdf转换") >= 0 || lower.IndexOf("图片转pdf") >= 0 || lower.IndexOf("万能转换") >= 0 || lower.IndexOf("external_rclick") >= 0 || lower.IndexOf("vt.quark.cn") >= 0)) return "夸克 PDF/万能转换右键菜单";
+            if (quarkEvidence) return "夸克右键菜单";
             if (lower.IndexOf("sogou") >= 0) return "搜狗右键菜单";
             if (lower.IndexOf("xunlei") >= 0 || lower.IndexOf("thunder") >= 0) return "迅雷右键菜单";
             if (lower.IndexOf("bandiview") >= 0 || lower.IndexOf("honeyview") >= 0) return "BandiView/Honeyview 看图右键菜单";
@@ -1203,6 +1209,7 @@ namespace RogueCleanerV2
             string lower = Join(evidence, rawName).ToLowerInvariant();
             if (lower.IndexOf("kingsoft") >= 0 || lower.IndexOf("wps") >= 0) return "WPS/金山浏览器扩展宿主";
             if (lower.IndexOf("baidunetdisk") >= 0) return "百度网盘浏览器扩展宿主";
+            if (lower.IndexOf("quark") >= 0 || lower.IndexOf("夸克") >= 0) return "夸克浏览器/网盘外部宿主";
             if (lower.IndexOf("sogou") >= 0) return "搜狗浏览器扩展/策略";
             if (lower.IndexOf("xunlei") >= 0 || lower.IndexOf("thunder") >= 0) return "迅雷浏览器下载助手";
             if (lower.IndexOf("360") >= 0 || lower.IndexOf("qihoo") >= 0) return "360 浏览器扩展/策略";
@@ -1216,6 +1223,7 @@ namespace RogueCleanerV2
             if (lower.IndexOf("q360amppl") >= 0) return "360 安全防护后台服务";
             if (lower.IndexOf("zhudongfangyu") >= 0 || lower.IndexOf("主动防御") >= 0 || lower.IndexOf("qhactivedefense") >= 0) return "360 主动防御后台服务";
             if (lower.IndexOf("baidunetdiskutility") >= 0 || lower.IndexOf("baiduyundetect") >= 0) return "百度网盘检测/同步后台服务";
+            if (lower.IndexOf("quark") >= 0 || lower.IndexOf("夸克") >= 0) return "夸克网盘后台服务";
             if (lower.IndexOf("wps office cloud service") >= 0 || lower.IndexOf("wpscloud") >= 0) return "WPS 云文档后台服务";
             if (lower.IndexOf("sogousvc") >= 0 || lower.IndexOf("sgimeguard") >= 0) return "搜狗输入法守护/更新服务";
             if (lower.IndexOf("xlservice") >= 0 || lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷后台/更新服务";
@@ -1230,6 +1238,7 @@ namespace RogueCleanerV2
             if (lower.IndexOf("getword") >= 0 || lower.IndexOf("wordsearch") >= 0 || lower.IndexOf("searchfetch") >= 0) return "360 划词/搜索计划任务";
             if (lower.IndexOf("qihoo") >= 0 || lower.IndexOf("360") >= 0) return "360 定时扫描/拉起计划任务";
             if (lower.IndexOf("baiduyun") >= 0 || lower.IndexOf("baidunetdisk") >= 0) return "百度网盘检测/同步计划任务";
+            if (lower.IndexOf("quark") >= 0 || lower.IndexOf("夸克") >= 0) return "夸克网盘更新/拉起计划任务";
             if (lower.IndexOf("sogou") >= 0) return "搜狗更新/弹窗计划任务";
             if (lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷更新/拉起计划任务";
             string human = FirstHumanText(name);
@@ -1314,6 +1323,7 @@ namespace RogueCleanerV2
         {
             string lower = (value ?? string.Empty).ToLowerInvariant();
             if (lower.IndexOf("baidunetdisk") >= 0) return "百度网盘";
+            if (lower.IndexOf("quarkclouddrive") >= 0 || lower.IndexOf("quark") >= 0 || lower.IndexOf("夸克") >= 0) return "夸克网盘";
             if (lower.IndexOf("bandiview") >= 0) return "BandiView 看图";
             if (lower.IndexOf("honeyview") >= 0) return "Honeyview 看图";
             if (lower.IndexOf("bandizip") >= 0) return "Bandizip 压缩";
@@ -2512,9 +2522,9 @@ namespace RogueCleanerV2
             root.RowCount = 4;
             root.ColumnCount = 1;
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             Controls.Add(root);
 
             Panel header = new Panel();
@@ -2560,7 +2570,8 @@ namespace RogueCleanerV2
             FlowLayoutPanel actions = new FlowLayoutPanel();
             actions.Dock = DockStyle.Fill;
             actions.Padding = new Padding(0);
-            actions.WrapContents = false;
+            actions.WrapContents = true;
+            actions.AutoScroll = true;
             toolArea.Controls.Add(actions, 0, 0);
 
             ConfigureButton(scanButton, "开始扫描", Color.FromArgb(14, 116, 144));
@@ -2580,12 +2591,15 @@ namespace RogueCleanerV2
             adminButton.Enabled = !AdminUtil.IsAdministrator();
             Label searchLabel = new Label();
             searchLabel.Text = "搜索";
-            searchLabel.Width = 42;
-            searchLabel.Height = 34;
+            searchLabel.AutoSize = false;
+            searchLabel.Width = TextRenderer.MeasureText(searchLabel.Text, Font).Width + 22;
+            searchLabel.Height = ControlHeight(Font);
             searchLabel.TextAlign = ContentAlignment.MiddleCenter;
+            searchLabel.Margin = new Padding(6, 0, 4, 8);
             actions.Controls.Add(searchLabel);
-            searchBox.Width = 260;
-            searchBox.Height = 32;
+            searchBox.Width = Math.Max(220, TextRenderer.MeasureText("搜索关键词关键字", Font).Width + 80);
+            searchBox.Height = ControlHeight(Font);
+            searchBox.Margin = new Padding(0, 1, 0, 8);
             actions.Controls.Add(searchBox);
 
             progress.Dock = DockStyle.Fill;
@@ -2619,8 +2633,9 @@ namespace RogueCleanerV2
             grid.MultiSelect = true;
             grid.EditMode = DataGridViewEditMode.EditProgrammatically;
             grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
-            grid.RowTemplate.Height = 34;
-            grid.ColumnHeadersHeight = 38;
+            grid.RowTemplate.Height = GridRowHeight();
+            grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            grid.ColumnHeadersHeight = GridHeaderHeight();
             grid.BackgroundColor = Color.White;
             grid.EnableHeadersVisualStyles = false;
             grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(15, 118, 110);
@@ -2631,14 +2646,14 @@ namespace RogueCleanerV2
             grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 251, 241);
             grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(15, 23, 42);
             grid.ShowCellToolTips = true;
-            grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = "选", Width = 45, TrueValue = true, FalseValue = false, ThreeState = false, SortMode = DataGridViewColumnSortMode.NotSortable });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "RiskDisplay", HeaderText = "风险", Width = 68, ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", Width = 130, ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "在哪里冒出来", Width = 155, ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserVisibleName", HeaderText = "用户会看到什么", Width = 240, ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserImpact", HeaderText = "影响说明", Width = 390, ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ActionText", HeaderText = "工具会怎么处理", Width = 210, ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "TechnicalLocation", HeaderText = "技术位置", Width = 420, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = "选", Width = ColumnWidth("选", 46), TrueValue = true, FalseValue = false, ThreeState = false, SortMode = DataGridViewColumnSortMode.NotSortable });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "RiskDisplay", HeaderText = "风险", Width = ColumnWidth("仅提示", 74), ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", Width = ColumnWidth("Bandisoft 看图/压缩工具", 160), ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "在哪里冒出来", Width = ColumnWidth("文件关联/默认打开程序", 190), ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserVisibleName", HeaderText = "用户会看到什么", Width = ColumnWidth("桌面/文件夹空白处右键：会出现“上传到夸克网盘”", 360), ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserImpact", HeaderText = "影响说明", Width = ColumnWidth("桌面/文件夹空白处右键：会出现“上传到夸克网盘”", 520), ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ActionText", HeaderText = "工具会怎么处理", Width = ColumnWidth("备份后删除这条注册表项", 260), ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "TechnicalLocation", HeaderText = "技术位置", Width = ColumnWidth("HKCU\\Software\\Classes\\Directory\\Background\\shell", 460), ReadOnly = true });
             foreach (DataGridViewColumn column in grid.Columns)
             {
                 column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -2821,14 +2836,36 @@ namespace RogueCleanerV2
         private static void ConfigureButton(Button button, string text, Color color)
         {
             button.Text = text;
-            button.Width = 112;
-            button.Height = 34;
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 0;
             button.BackColor = color;
             button.ForeColor = Color.White;
             button.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-            button.Margin = new Padding(0, 0, 10, 0);
+            button.AutoSize = true;
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.Padding = new Padding(13, 0, 13, 0);
+            button.MinimumSize = new Size(Math.Max(112, TextRenderer.MeasureText(text, button.Font).Width + 30), ControlHeight(button.Font));
+            button.Margin = new Padding(0, 0, 10, 8);
+        }
+
+        private static int ControlHeight(Font font)
+        {
+            return Math.Max(34, TextRenderer.MeasureText("国", font).Height + 14);
+        }
+
+        private int GridRowHeight()
+        {
+            return Math.Max(34, TextRenderer.MeasureText("国", grid.Font).Height + 16);
+        }
+
+        private int GridHeaderHeight()
+        {
+            return Math.Max(40, TextRenderer.MeasureText("国", grid.ColumnHeadersDefaultCellStyle.Font ?? Font).Height + 18);
+        }
+
+        private int ColumnWidth(string sample, int minimum)
+        {
+            return Math.Max(minimum, TextRenderer.MeasureText(sample, grid.Font).Width + 32);
         }
 
         private void StartScan()
