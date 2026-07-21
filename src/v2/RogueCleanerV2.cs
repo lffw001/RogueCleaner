@@ -23,15 +23,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.4.0")]
-[assembly: AssemblyFileVersion("2.0.4.0")]
+[assembly: AssemblyVersion("2.0.5.0")]
+[assembly: AssemblyFileVersion("2.0.5.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.4";
+        public const string Version = "2.0.5";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -243,6 +243,19 @@ namespace RogueCleanerV2
         public string CreatedAt { get; set; }
         public string Path { get; set; }
         public List<CleanupResult> Results { get; set; }
+    }
+
+    internal sealed class RestoreBatchResult
+    {
+        public int Total { get; set; }
+        public int Succeeded { get; set; }
+        public int Failed { get; set; }
+        public List<string> Messages { get; set; }
+
+        public bool AllSucceeded
+        {
+            get { return Failed == 0; }
+        }
     }
 
     internal static class AdminUtil
@@ -1417,48 +1430,141 @@ namespace RogueCleanerV2
             string backupName = native;
             if (!string.IsNullOrEmpty(target.ValueName)) backupName += "__value__" + target.ValueName;
             string path = Path.Combine(Path.Combine(batchPath, "registry"), SafeFileName(backupName) + ".reg");
-            RunHidden("reg.exe", "export \"" + native + "\" \"" + path + "\" /y");
+            int exitCode = RunHidden("reg.exe", "export \"" + native + "\" \"" + path + "\" /y" + RegistryViewArg(target));
+            if (exitCode != 0) Logger.Error("注册表备份失败：" + native, new InvalidOperationException("reg export 退出码 " + exitCode));
             return File.Exists(path) ? path : null;
         }
 
-        public void RestoreBatch(CleanupBatch batch)
+        private static string RegistryViewArg(ActionTarget target)
         {
+            if (target == null) return string.Empty;
+            if (string.Equals(target.View, "Registry32", StringComparison.OrdinalIgnoreCase)) return " /reg:32";
+            if (string.Equals(target.View, "Registry64", StringComparison.OrdinalIgnoreCase)) return " /reg:64";
+            return string.Empty;
+        }
+
+        public RestoreBatchResult RestoreBatch(CleanupBatch batch)
+        {
+            RestoreBatchResult summary = new RestoreBatchResult
+            {
+                Messages = new List<string>()
+            };
+            if (batch == null || batch.Results == null) return summary;
             foreach (CleanupResult result in batch.Results)
             {
-                RestoreResult(result);
+                summary.Total++;
+                string message;
+                bool ok = RestoreResult(result, out message);
+                if (ok) summary.Succeeded++;
+                else summary.Failed++;
+                if (!string.IsNullOrWhiteSpace(message)) summary.Messages.Add(message);
+            }
+            return summary;
+        }
+
+        public bool RestoreResult(CleanupResult result, out string message)
+        {
+            message = string.Empty;
+            if (result == null)
+            {
+                message = "空恢复项，已跳过。";
+                return true;
+            }
+            if (!string.Equals(result.Status, "Done", StringComparison.OrdinalIgnoreCase))
+            {
+                message = result.Title + "：原清理结果为 " + result.Status + "，无需恢复。";
+                return true;
+            }
+            try
+            {
+                if (result.Target == null || string.IsNullOrEmpty(result.Target.Kind))
+                {
+                    message = result.Title + "：缺少恢复目标。";
+                    return false;
+                }
+
+                ActionTarget target = result.Target;
+                if ((target.Kind == "DeleteRegistryKey" || target.Kind == "DeleteRegistryValue") &&
+                    !string.IsNullOrEmpty(result.Backup) &&
+                    result.Backup.EndsWith(".reg", StringComparison.OrdinalIgnoreCase) &&
+                    File.Exists(result.Backup))
+                {
+                    int exitCode = RunHidden("reg.exe", "import \"" + result.Backup + "\"" + RegistryViewArg(target));
+                    bool restored = target.Kind == "DeleteRegistryKey" ? RegistryHelper.KeyExists(target) : RegistryHelper.ValueExists(target);
+                    message = result.Title + "：" + (restored ? "注册表已恢复。" : "注册表恢复后复核失败。reg import 退出码 " + exitCode);
+                    return exitCode == 0 && restored;
+                }
+                if (target.Kind == "MoveFileToBackup" && !string.IsNullOrEmpty(result.Backup) && File.Exists(result.Backup))
+                {
+                    string dest = Environment.ExpandEnvironmentVariables(target.FilePath);
+                    string parent = Path.GetDirectoryName(dest);
+                    if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                    if (File.Exists(dest))
+                    {
+                        message = result.Title + "：原位置已经有同名文件，备份已保留，没有覆盖。";
+                        return false;
+                    }
+                    File.Move(result.Backup, dest);
+                    bool restored = File.Exists(dest);
+                    message = result.Title + "：" + (restored ? "文件已移回原位置。" : "文件恢复后复核失败。");
+                    return restored;
+                }
+                if (target.Kind == "DisableService" && !string.IsNullOrEmpty(result.Backup) && File.Exists(result.Backup))
+                {
+                    string state = File.ReadAllText(result.Backup, Encoding.UTF8);
+                    string start = state.IndexOf("Auto", StringComparison.OrdinalIgnoreCase) >= 0 ? "auto" : (state.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) >= 0 ? "disabled" : "demand");
+                    int exitCode = RunHidden("sc.exe", "config \"" + target.ServiceName + "\" start= " + start);
+                    string restoredState = GetServiceState(target.ServiceName);
+                    bool restored = start == "auto"
+                        ? restoredState.Equals("Auto", StringComparison.OrdinalIgnoreCase)
+                        : (start == "disabled" ? restoredState.Equals("Disabled", StringComparison.OrdinalIgnoreCase) : restoredState.Equals("Manual", StringComparison.OrdinalIgnoreCase));
+                    message = result.Title + "：" + (restored ? "服务启动状态已恢复。" : "服务恢复后复核失败，当前状态 " + restoredState + "，命令退出码 " + exitCode);
+                    return exitCode == 0 && restored;
+                }
+                if (target.Kind == "DisableScheduledTask" && !string.IsNullOrEmpty(result.Backup) && Directory.Exists(result.Backup))
+                {
+                    string xml = Path.Combine(result.Backup, "task.xml");
+                    string stateFile = Path.Combine(result.Backup, "state.txt");
+                    if (!ScheduledTaskExists(target.TaskName) && File.Exists(xml))
+                    {
+                        int createCode = RunHidden("schtasks.exe", "/Create /TN \"" + target.TaskName + "\" /XML \"" + xml + "\" /F");
+                        if (createCode != 0)
+                        {
+                            message = result.Title + "：计划任务重建失败，退出码 " + createCode;
+                            return false;
+                        }
+                    }
+                    string state = File.Exists(stateFile) ? File.ReadAllText(stateFile, Encoding.UTF8) : "Enabled";
+                    bool shouldDisable = state.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) >= 0;
+                    int changeCode = RunHidden("schtasks.exe", "/Change /TN \"" + target.TaskName + "\" " + (shouldDisable ? "/Disable" : "/Enable"));
+                    bool enabled;
+                    bool exists = TryGetScheduledTaskEnabled(target.TaskName, out enabled);
+                    bool restored = exists && (shouldDisable ? !enabled : enabled);
+                    message = result.Title + "：" + (restored ? "计划任务状态已恢复。" : "计划任务恢复后复核失败，命令退出码 " + changeCode);
+                    return changeCode == 0 && restored;
+                }
+
+                message = result.Title + "：没有可用备份，无法恢复。";
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("恢复失败：" + result.Title, ex);
+                message = result.Title + "：" + ex.Message;
+                return false;
             }
         }
 
-        public void RestoreResult(CleanupResult result)
+        public void DeleteBatchRecord(CleanupBatch batch)
         {
-            if (result == null) return;
-            if (!string.IsNullOrEmpty(result.Backup) && result.Backup.EndsWith(".reg", StringComparison.OrdinalIgnoreCase) && File.Exists(result.Backup))
+            if (batch == null || string.IsNullOrWhiteSpace(batch.Path)) return;
+            string backupRoot = Path.GetFullPath(store.Backups).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string batchPath = Path.GetFullPath(batch.Path);
+            if (!batchPath.StartsWith(backupRoot, StringComparison.OrdinalIgnoreCase))
             {
-                RunHidden("reg.exe", "import \"" + result.Backup + "\"");
+                throw new InvalidOperationException("恢复记录路径不在备份目录下，拒绝删除：" + batchPath);
             }
-            else if (result.Target != null && result.Target.Kind == "MoveFileToBackup" && !string.IsNullOrEmpty(result.Backup) && File.Exists(result.Backup))
-            {
-                string dest = Environment.ExpandEnvironmentVariables(result.Target.FilePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                if (!File.Exists(dest)) File.Move(result.Backup, dest);
-            }
-            else if (result.Target != null && result.Target.Kind == "DisableService" && !string.IsNullOrEmpty(result.Backup) && File.Exists(result.Backup))
-            {
-                string state = File.ReadAllText(result.Backup, Encoding.UTF8);
-                string start = state.IndexOf("Auto", StringComparison.OrdinalIgnoreCase) >= 0 ? "auto" : "demand";
-                RunHidden("sc.exe", "config \"" + result.Target.ServiceName + "\" start= " + start);
-            }
-            else if (result.Target != null && result.Target.Kind == "DisableScheduledTask" && !string.IsNullOrEmpty(result.Backup) && Directory.Exists(result.Backup))
-            {
-                string xml = Path.Combine(result.Backup, "task.xml");
-                string stateFile = Path.Combine(result.Backup, "state.txt");
-                if (!ScheduledTaskExists(result.Target.TaskName) && File.Exists(xml))
-                {
-                    RunHidden("schtasks.exe", "/Create /TN \"" + result.Target.TaskName + "\" /XML \"" + xml + "\" /F");
-                }
-                string state = File.Exists(stateFile) ? File.ReadAllText(stateFile, Encoding.UTF8) : "Enabled";
-                RunHidden("schtasks.exe", "/Change /TN \"" + result.Target.TaskName + "\" " + (state.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) >= 0 ? "/Disable" : "/Enable"));
-            }
+            if (Directory.Exists(batchPath)) Directory.Delete(batchPath, true);
         }
 
         public List<CleanupBatch> LoadBatches()
@@ -1569,15 +1675,29 @@ namespace RogueCleanerV2
             File.WriteAllText(path, text ?? string.Empty, new UTF8Encoding(true));
         }
 
-        private static void RunHidden(string file, string args)
+        private static int RunHidden(string file, string args)
         {
-            ProcessStartInfo psi = new ProcessStartInfo(file, args);
-            psi.CreateNoWindow = true;
-            psi.UseShellExecute = false;
-            psi.WindowStyle = ProcessWindowStyle.Hidden;
-            using (Process process = Process.Start(psi))
+            try
             {
-                process.WaitForExit(60000);
+                ProcessStartInfo psi = new ProcessStartInfo(file, args);
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+                using (Process process = Process.Start(psi))
+                {
+                    if (!process.WaitForExit(60000))
+                    {
+                        try { process.Kill(); } catch { }
+                        Logger.Error("命令执行超时：" + file + " " + args, new TimeoutException("等待 60 秒仍未退出。"));
+                        return -1;
+                    }
+                    return process.ExitCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("命令执行失败：" + file + " " + args, ex);
+                return -1;
             }
         }
 
@@ -2945,19 +3065,51 @@ namespace RogueCleanerV2
         {
             if (batchList.SelectedIndex < 0 || batchList.SelectedIndex >= batches.Count) return;
             CleanupBatch batch = batches[batchList.SelectedIndex];
+            if (BatchNeedsAdmin(batch) && !AdminUtil.IsAdministrator())
+            {
+                DialogResult elevate = MessageBox.Show("这个批次里有系统注册表、后台服务或计划任务，恢复需要管理员权限。\n\n是否现在以管理员身份重启工具？", "需要管理员权限", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (elevate == DialogResult.Yes) AdminUtil.RelaunchAsAdmin();
+                return;
+            }
             DialogResult answer = MessageBox.Show("恢复批次 " + batch.Id + "？\n\n恢复会导入备份注册表或移回被隔离文件。", "确认恢复", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (answer != DialogResult.Yes) return;
             try
             {
-                new CleanerEngine(store).RestoreBatch(batch);
-                statusLabel.Text = "恢复命令已执行。建议重新扫描确认。";
-                MessageBox.Show("恢复命令已执行。建议重新扫描确认。", "恢复完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                CleanerEngine cleaner = new CleanerEngine(store);
+                RestoreBatchResult result = cleaner.RestoreBatch(batch);
+                string detail = string.Join(Environment.NewLine, result.Messages.Take(8).ToArray());
+                if (result.AllSucceeded)
+                {
+                    cleaner.DeleteBatchRecord(batch);
+                    LoadBatches();
+                    statusLabel.Text = "恢复成功，已删除该批次恢复记录。建议重新扫描确认。";
+                    MessageBox.Show("恢复成功：" + result.Succeeded + "/" + result.Total + " 项。\n\n该批次记录已从恢复中心删除。\n\n建议重新扫描确认。", "恢复完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    statusLabel.Text = "恢复未完全成功，批次记录已保留。";
+                    MessageBox.Show("恢复未完全成功。\n\n成功：" + result.Succeeded + " 项\n失败：" + result.Failed + " 项\n\n失败记录已保留在恢复中心，方便你再次尝试。\n\n" + detail, "恢复失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
             catch (Exception ex)
             {
                 Logger.Error("恢复失败", ex);
                 MessageBox.Show(ex.Message, "恢复失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private static bool BatchNeedsAdmin(CleanupBatch batch)
+        {
+            if (batch == null || batch.Results == null) return false;
+            foreach (CleanupResult result in batch.Results)
+            {
+                ActionTarget target = result == null ? null : result.Target;
+                if (target == null) continue;
+                if (string.Equals(target.Hive, "HKLM", StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(target.Kind, "DisableService", StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(target.Kind, "DisableScheduledTask", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
         }
 
         private void BatchListDrawItem(object sender, DrawItemEventArgs e)
