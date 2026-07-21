@@ -24,15 +24,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.7.0")]
-[assembly: AssemblyFileVersion("2.0.7.0")]
+[assembly: AssemblyVersion("2.0.8.0")]
+[assembly: AssemblyFileVersion("2.0.8.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.7";
+        public const string Version = "2.0.8";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -168,9 +168,23 @@ namespace RogueCleanerV2
         }
     }
 
-    internal sealed class Finding
+    internal sealed class Finding : INotifyPropertyChanged
     {
-        public bool Selected { get; set; }
+        private bool selected;
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public bool Selected
+        {
+            get { return selected; }
+            set
+            {
+                if (selected == value) return;
+                selected = value;
+                OnPropertyChanged("Selected");
+            }
+        }
+
         public int Id { get; set; }
         public string Risk { get; set; }
         public int Score { get; set; }
@@ -208,6 +222,12 @@ namespace RogueCleanerV2
                 if (string.Equals(ActionKind, "InvokeUninstaller", StringComparison.OrdinalIgnoreCase)) return "弹出卸载器，用户自己确认";
                 return "仅提示，不一键动默认程序";
             }
+        }
+
+        private void OnPropertyChanged(string name)
+        {
+            PropertyChangedEventHandler handler = PropertyChanged;
+            if (handler != null) handler(this, new PropertyChangedEventArgs(name));
         }
     }
 
@@ -2571,6 +2591,8 @@ namespace RogueCleanerV2
             grid.AllowUserToDeleteRows = false;
             grid.RowHeadersVisible = false;
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            grid.MultiSelect = true;
+            grid.EditMode = DataGridViewEditMode.EditOnEnter;
             grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             grid.RowTemplate.Height = 34;
             grid.ColumnHeadersHeight = 38;
@@ -2584,7 +2606,7 @@ namespace RogueCleanerV2
             grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 251, 241);
             grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(15, 23, 42);
             grid.ShowCellToolTips = true;
-            grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = "选", Width = 45 });
+            grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = "选", Width = 45, TrueValue = true, FalseValue = false, ThreeState = false, SortMode = DataGridViewColumnSortMode.NotSortable });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Risk", HeaderText = "风险", Width = 60, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", Width = 130, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "在哪里冒出来", Width = 155, ReadOnly = true });
@@ -2636,6 +2658,14 @@ namespace RogueCleanerV2
             rows.ListChanged += delegate { UpdateSummary(); };
             grid.CellToolTipTextNeeded += GridCellToolTipTextNeeded;
             grid.CellFormatting += GridCellFormatting;
+            grid.CellMouseUp += delegate(object sender, DataGridViewCellMouseEventArgs e)
+            {
+                if (e.RowIndex >= 0 && e.ColumnIndex == 0)
+                {
+                    grid.EndEdit();
+                    UpdateSummary();
+                }
+            };
             authorLink.LinkClicked += delegate { OpenAuthorLinks(); };
             grid.CurrentCellDirtyStateChanged += delegate
             {
