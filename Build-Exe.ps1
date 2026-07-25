@@ -8,7 +8,6 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
 $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-$src = Join-Path $root 'src\Launcher.cs'
 $v2Src = Join-Path $root 'src\v2'
 $manifest = Join-Path $root 'src\app.manifest'
 $icon = Join-Path $root 'src\app.ico'
@@ -17,32 +16,17 @@ $exe = Join-Path $root '流氓软件克星.exe'
 $dist = Join-Path $root 'dist\流氓软件克星'
 $resolvedRoot = [System.IO.Path]::GetFullPath($root)
 $resolvedDist = [System.IO.Path]::GetFullPath($dist)
-$script = Join-Path $root 'RogueCleaner.ps1'
-$rules = Join-Path $root 'rules'
-$extractNote = Join-Path $root '先解压整个文件夹再运行.txt'
-
-function Copy-Utf8BomTextFile {
-    param(
-        [Parameter(Mandatory)][string]$Source,
-        [Parameter(Mandatory)][string]$Destination
-    )
-    $text = Get-Content -LiteralPath $Source -Raw -Encoding UTF8
-    $encoding = [System.Text.UTF8Encoding]::new($true)
-    $bytes = [byte[]]($encoding.GetPreamble() + $encoding.GetBytes($text))
-    [System.IO.File]::WriteAllBytes($Destination, $bytes)
-}
 
 if (!$PackageOnly) {
     New-Item -ItemType Directory -Path $obj -Force | Out-Null
 
+    if (!(Test-Path -LiteralPath $v2Src -PathType Container)) {
+        throw "缺少 v2 源码目录：$v2Src"
+    }
     $sources = @(
-        if (Test-Path -LiteralPath $v2Src -PathType Container) {
-            Get-ChildItem -LiteralPath $v2Src -Filter '*.cs' -File |
-                Sort-Object FullName |
-                ForEach-Object { $_.FullName }
-        } else {
-            $src
-        }
+        Get-ChildItem -LiteralPath $v2Src -Filter '*.cs' -File |
+            Sort-Object FullName |
+            ForEach-Object { $_.FullName }
     )
     if ($sources.Count -eq 0) {
         throw "没有找到 C# 源码文件。"
@@ -93,24 +77,6 @@ if (Test-Path -LiteralPath $resolvedDist) {
 New-Item -ItemType Directory -Path $resolvedDist -Force | Out-Null
 
 Copy-Item -LiteralPath $exe -Destination (Join-Path $resolvedDist '流氓软件克星.exe') -Force
-if (!(Test-Path -LiteralPath $v2Src -PathType Container)) {
-    if (!(Test-Path -LiteralPath $script -PathType Leaf)) {
-        throw "缺少运行脚本：$script"
-    }
-    foreach ($rule in @('vendors.json', 'locations.json', 'behaviors.json')) {
-        $rulePath = Join-Path $rules $rule
-        if (!(Test-Path -LiteralPath $rulePath -PathType Leaf)) {
-            throw "缺少规则文件：$rulePath"
-        }
-    }
-    New-Item -ItemType Directory -Path (Join-Path $resolvedDist 'reports') -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $resolvedDist 'backups') -Force | Out-Null
-    Copy-Utf8BomTextFile -Source $script -Destination (Join-Path $resolvedDist 'RogueCleaner.ps1')
-    Copy-Item -LiteralPath $rules -Destination (Join-Path $resolvedDist 'rules') -Recurse -Force
-    if (Test-Path -LiteralPath $extractNote -PathType Leaf) {
-        Copy-Item -LiteralPath $extractNote -Destination (Join-Path $resolvedDist '先解压整个文件夹再运行.txt') -Force
-    }
-}
 
 Write-Host "EXE=$exe"
 Write-Host "PACKAGE=$resolvedDist"

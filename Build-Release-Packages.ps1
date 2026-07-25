@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 $rar = 'C:\Program Files\WinRAR\Rar.exe'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$version = '2.0.10'
+$version = '2.0.11'
 $releaseRoot = Join-Path $root 'release'
 $oldDir = Join-Path $releaseRoot '_old'
 $workRoot = Join-Path $releaseRoot "package-$stamp"
@@ -33,7 +33,7 @@ $staleDataDir = Join-Path $releaseRoot '流氓软件克星数据'
 if (Test-Path -LiteralPath $staleDataDir -PathType Container) {
     Move-Item -LiteralPath $staleDataDir -Destination (Join-Path $oldDir "stale-runtime-data-$stamp") -Force
 }
-Get-ChildItem -LiteralPath $releaseRoot -File | Where-Object { $_.Extension -in @('.rar', '.exe') } | ForEach-Object {
+Get-ChildItem -LiteralPath $releaseRoot -File | Where-Object { $_.Extension -in @('.rar', '.exe') -or $_.Name -like 'SHA256SUMS-v*.txt' } | ForEach-Object {
     Move-Item -LiteralPath $_.FullName -Destination (Join-Path $oldDir $_.Name) -Force
 }
 if (Test-Path -LiteralPath $workRoot) {
@@ -50,7 +50,19 @@ foreach ($file in @(
 )) {
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $sourceStage -Force
 }
-Copy-Item -LiteralPath (Join-Path $root 'src') -Destination $sourceStage -Recurse -Force
+$sourceSrc = Join-Path $sourceStage 'src'
+New-Item -ItemType Directory -Path $sourceSrc -Force | Out-Null
+foreach ($file in @(
+    'app.manifest',
+    'app.ico',
+    'app-icon.png'
+)) {
+    $path = Join-Path $root "src\$file"
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        Copy-Item -LiteralPath $path -Destination $sourceSrc -Force
+    }
+}
+Copy-Item -LiteralPath (Join-Path $root 'src\v2') -Destination $sourceSrc -Recurse -Force
 
 foreach ($file in @(
     '流氓软件克星.exe'
@@ -61,6 +73,7 @@ foreach ($file in @(
 $sourceArchive = Join-Path $releaseRoot "RogueCleaner-Source-v$version-$stamp.rar"
 $exeArchive = Join-Path $releaseRoot "RogueCleaner-Transparent-v$version-$stamp.rar"
 $directExe = Join-Path $releaseRoot "RogueCleaner-v$version-$stamp.exe"
+$hashFile = Join-Path $releaseRoot "SHA256SUMS-v$version-$stamp.txt"
 Push-Location $workRoot
 try {
     & $rar a -r -m5 -idq $sourceArchive 'RogueCleaner-Source'
@@ -72,8 +85,16 @@ finally {
     Pop-Location
 }
 Copy-Item -LiteralPath (Join-Path $root 'dist\流氓软件克星\流氓软件克星.exe') -Destination $directExe -Force
+$hashLines = @()
+foreach ($path in @($directExe, $exeArchive, $sourceArchive)) {
+    $hash = Get-FileHash -LiteralPath $path -Algorithm SHA256
+    $hashLines += "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $path)"
+}
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[System.IO.File]::WriteAllLines($hashFile, [string[]]$hashLines, $utf8NoBom)
 Move-Item -LiteralPath $workRoot -Destination (Join-Path $oldDir (Split-Path -Leaf $workRoot)) -Force
 
 Write-Host "SOURCE=$sourceArchive"
 Write-Host "TRANSPARENT=$exeArchive"
 Write-Host "DIRECT_EXE=$directExe"
+Write-Host "SHA256SUMS=$hashFile"

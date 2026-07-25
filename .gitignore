@@ -6,6 +6,7 @@ dist/
 obj/
 release/*.rar
 release/*.exe
+release/SHA256SUMS-v*.txt
 release/旧版勿发/
 release/_old/
 icon-options/

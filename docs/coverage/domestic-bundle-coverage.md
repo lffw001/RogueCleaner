@@ -9,6 +9,7 @@
 - 百度 / 百度网盘：网盘主程序、看图组件、同步组件、YunShell、Native Messaging Host、检测/守护服务。
 - 搜狗：输入法、浏览器、弹窗、新闻、皮肤/推荐、云服务、守护、自启动。
 - 迅雷：主程序、下载助手浏览器扩展、XLService/ThunderPlatform、ThunderStart、ThunderBrowser。
+- 钉钉：文件右键“上传钉钉并打开”、DingTalk Shell 扩展、钉盘/文档上传入口、后台/更新残留。
 - 腾讯系：QQ 浏览器、电脑管家、QQProtect、QQPCRTP、腾讯文档、微信/企业微信相关右键或启动残留。
 - 2345 系列：浏览器、看图王、好压、软件管家、安全卫士、MiniPage/迷你页、保护服务。
 - 猎豹 / 金山毒霸：猎豹浏览器、金山毒霸、KSafe/KWatch/KAV 常驻项。
@@ -27,6 +28,7 @@
 
 - 右键菜单：`shell`、`shellex\ContextMenuHandlers`、图片/视频/音频/文本/压缩包专用右键、磁盘/文件夹/快捷方式右键。
 - CLSID 反查：右键扩展只有 GUID 时，反查 `CLSID\{...}` 的默认名、`InprocServer32`、`LocalServer32` 和 `ProgID`。
+- 此电脑/资源管理器入口：`Explorer\MyComputer\NameSpace`、`Explorer\Desktop\NameSpace`、`Explorer\NetworkNeighborhood\NameSpace`，以及被 `System.IsPinnedToNameSpaceTree` 固定到导航栏的已知厂商 CLSID。
 - 自启动：HKCU/HKLM `Run`、`RunOnce` 和启动文件夹，`.lnk` 会解析真实目标。
 - 服务：`Win32_Service`，匹配后备份启动状态并禁用。
 - 计划任务：Task Scheduler COM，匹配后备份 XML 和启用状态并禁用。
