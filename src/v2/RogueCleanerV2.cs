@@ -12,6 +12,7 @@ using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
@@ -24,17 +25,17 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.11.0")]
-[assembly: AssemblyFileVersion("2.0.11.0")]
+[assembly: AssemblyVersion("2.0.12.0")]
+[assembly: AssemblyFileVersion("2.0.12.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.11";
+        public const string Version = "2.0.12";
         public const string AuthorName = "aakk007";
-        public const string Author52PojieUrl = "https://www.52pojie.cn/?286924";
+        public const string Author52PojieUrl = "https://www.52pojie.cn/home.php?mod=space&uid=286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
         public const string Repository = "https://github.com/aakk007/RogueCleaner";
         public const string ReleasesUrl = "https://github.com/aakk007/RogueCleaner/releases";
@@ -56,6 +57,9 @@ namespace RogueCleanerV2
             store.Ensure();
             Logger.Initialize(store);
             bool smoke = HasArg(args, "--scan-smoke");
+            bool identitySmoke = HasArg(args, "--identity-smoke");
+            bool feedbackSmoke = HasArg(args, "--feedback-smoke");
+            bool uiSmoke = HasArg(args, "--ui-smoke");
 #if VALIDATION
             bool acceptance = HasArg(args, "--acceptance-test");
 #endif
@@ -70,6 +74,27 @@ namespace RogueCleanerV2
                     return exitCode;
                 }
 #endif
+                if (identitySmoke)
+                {
+                    List<string> failures = RuleCatalog.RunIdentitySelfTests();
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "identity-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 2;
+                    return Environment.ExitCode;
+                }
+                if (feedbackSmoke)
+                {
+                    List<string> failures = FeedbackService.RunSelfTests(store);
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "feedback-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 3;
+                    return Environment.ExitCode;
+                }
+                if (uiSmoke)
+                {
+                    List<string> failures = UiRegression.Run(store);
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "ui-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 4;
+                    return Environment.ExitCode;
+                }
                 if (smoke)
                 {
                     List<Finding> findings = new ScannerEngine().ScanAll(null);
@@ -84,7 +109,7 @@ namespace RogueCleanerV2
             catch (Exception ex)
             {
                 Logger.Error("启动失败", ex);
-                if (!smoke) MessageBox.Show("启动失败：" + ex.Message, AppMeta.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!smoke && !identitySmoke && !feedbackSmoke && !uiSmoke) MessageBox.Show("启动失败：" + ex.Message, AppMeta.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Environment.ExitCode = 1;
                 return 1;
             }
@@ -154,6 +179,7 @@ namespace RogueCleanerV2
         public string Updates { get; private set; }
         public string Quarantine { get; private set; }
         public string State { get; private set; }
+        public string Feedbacks { get; private set; }
 
         public static DataStore CreateForExecutable(string exePath)
         {
@@ -167,7 +193,8 @@ namespace RogueCleanerV2
                 Logs = Path.Combine(root, "logs"),
                 Updates = Path.Combine(root, "updates"),
                 Quarantine = Path.Combine(root, "quarantine"),
-                State = Path.Combine(root, "state")
+                State = Path.Combine(root, "state"),
+                Feedbacks = Path.Combine(root, "feedback")
             };
         }
 
@@ -180,6 +207,7 @@ namespace RogueCleanerV2
             Directory.CreateDirectory(Updates);
             Directory.CreateDirectory(Quarantine);
             Directory.CreateDirectory(State);
+            Directory.CreateDirectory(Feedbacks);
         }
 
         public string StateFile(string name)
@@ -397,6 +425,46 @@ namespace RogueCleanerV2
         void Finding(Finding finding);
     }
 
+    internal sealed class VendorEvidence
+    {
+        public readonly List<string> HumanTexts = new List<string>();
+        public readonly List<string> Publishers = new List<string>();
+        public readonly List<string> ProductNames = new List<string>();
+        public readonly List<string> TechnicalIdentifiers = new List<string>();
+        public readonly List<string> Commands = new List<string>();
+        public readonly List<string> FilePaths = new List<string>();
+        public readonly List<string> MsiProductCodes = new List<string>();
+        public readonly List<string> OpaqueValues = new List<string>();
+
+        public VendorEvidence AddHuman(params string[] values) { Add(HumanTexts, values); return this; }
+        public VendorEvidence AddPublisher(params string[] values) { Add(Publishers, values); return this; }
+        public VendorEvidence AddProduct(params string[] values) { Add(ProductNames, values); return this; }
+        public VendorEvidence AddTechnical(params string[] values) { Add(TechnicalIdentifiers, values); return this; }
+        public VendorEvidence AddCommand(params string[] values) { Add(Commands, values); return this; }
+        public VendorEvidence AddFile(params string[] values) { Add(FilePaths, values); return this; }
+        public VendorEvidence AddMsi(params string[] values) { Add(MsiProductCodes, values); return this; }
+        public VendorEvidence AddOpaque(params string[] values) { Add(OpaqueValues, values); return this; }
+
+        private static void Add(List<string> target, IEnumerable<string> values)
+        {
+            if (values == null) return;
+            foreach (string value in values)
+            {
+                if (string.IsNullOrWhiteSpace(value)) continue;
+                if (!target.Contains(value, StringComparer.OrdinalIgnoreCase)) target.Add(value.Trim());
+            }
+        }
+    }
+
+    internal sealed class VendorIdentityResult
+    {
+        public string Vendor { get; set; }
+        public int Confidence { get; set; }
+        public bool Confirmed { get; set; }
+        public bool Conflicted { get; set; }
+        public string EvidenceSummary { get; set; }
+    }
+
     internal static class RuleCatalog
     {
         private sealed class VendorRule
@@ -414,75 +482,597 @@ namespace RogueCleanerV2
             new VendorRule { Name = "WPS / 金山", Snark = "文档软件顺手也想接管图片、云文档和右键。", Boost = 18, Patterns = new [] { "WPS Office", "WPS.", "WPS_", "WPS-", "Kingsoft", "金山", "Zhuhai Kingsoft", "kwps", "qingshell", "qingnse", "kdesktop", "kdocs", "photolaunch", "wpscloud", "WpsDrive", "WPS.PIC", "WPSPic", "WPSPhoto", "WPS图片", "QingNseContextMenu", "kwpsshellext", "qingshellext", "kdesktopshellext", "qkdesktopshellext", "WPSAI", "WPS AI", "KingsoftAI", "AiWPS", "WPS灵犀", "wpsLingxi", "lingxi", "旺仔", "Wangzai", "wpscenter", "wpsupdate", "WpsUpdateTask", "WPS Office Cloud Service", "wpscloudsvr", "ksomisc" }, BadComponents = new [] { "kwpsshellext", "qingshellext", "QingNseContextMenu", "kdesktopshellext", "qkdesktopshellext", "WPS.PIC", "WPSPic", "photolaunch.exe", "Wangzai", "wpscloudsvr" } },
             new VendorRule { Name = "百度 / 百度网盘", Snark = "网盘不只同步文件，还喜欢同步到右键菜单。", Boost = 18, Patterns = new [] { "Baidu", "百度", "BaiduNetdisk", "BaiduNetdiskUnite", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskDesktopSync", "BaiduNetdiskSync", "BaiduNetdiskUtility", "BaiduNetdiskService", "BaiduNetdiskHost", "BaiduYun", "BaiduYunDetect", "YunShell", "YunShellExt", "YunDetectService", "cloudpic", "百度网盘看图", "百度网盘同步", "北京度友" }, BadComponents = new [] { "YunShellExt", "YunShellExplorerCommand", "BaiduNetdiskImageViewer", "BaiduNetdiskImageView", "BaiduNetdiskUtility", "BaiduNetdiskService", "cloudpic.dll", "imageviewer" } },
             new VendorRule { Name = "夸克 / 夸克网盘", Snark = "网盘上传和 PDF 转换也来抢右键，至少别披成迅雷的马甲。", Boost = 18, Patterns = new [] { "QuarkCloudDrive", "QuarkCloudDrive.upload", "QuarkCloudDrive.backup", "QuarkNetdisk", "QuarkDisk", "QuarkPan", "QuarkPDF", "QuarkConvert", "QuarkPC", "quark.cn", "pan.quark.cn", "vt.quark.cn", "quark-pc", "external_rclick", "夸克", "夸克网盘", "夸克浏览器", "上传到夸克网盘", "夸克网盘上传" }, BadComponents = new [] { "QuarkCloudDrive.upload", "QuarkCloudDrive.backup", "QuarkPDF", "QuarkConvert", "quark-pc", "external_rclick", "上传到夸克网盘", "PDF转换", "图片转PDF", "万能转换" } },
-            new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouImeMgr", "SogouFlash", "SogouTips", "SogouNews", "SogouPopup", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd", "SogouUpdate", "SogouComMgr", "SGTool", "PinyinUp" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop", "SogouPopup", "SogouNews", "SGImeGuard" } },
-            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "XLServicePlatform", "ThunderPlatform", "ThunderAgent", "ThunderStart", "ThunderBrowser", "XunleiBHO", "XunleiDownload", "XunleiMedia", "Xunlei.XLB", "XLLiveUD", "XLGameBox", "XMP", "TBCrash", "BrowserEngine", "迅雷下载助手" }, BadComponents = new [] { "XLService", "XLServicePlatform", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart", "XunleiBHO" } },
+            new VendorRule { Name = "搜狗", Snark = "输入法可以输入字，但没必要输入到开机项里。", Boost = 16, Patterns = new [] { "Sogou", "搜狗", "SogouInput", "SogouPY", "SogouExplorer", "SogouCloud", "SogouIme", "SogouImeBroker", "SogouImeMgr", "SogouFlash", "SogouTips", "SogouNews", "SogouPopup", "SogouSvc", "SGImeGuard", "SogouInputPop", "SogouAd", "SogouUpdate", "SogouComMgr", "PinyinUp" }, BadComponents = new [] { "SogouImeBroker", "SogouInput", "SogouExplorer", "SogouFlash", "SogouTips", "SogouAd", "SogouInputPop", "SogouPopup", "SogouNews", "SGImeGuard" } },
+            new VendorRule { Name = "迅雷", Snark = "下载器最爱给自己安排开机打卡。", Boost = 20, Patterns = new [] { "Xunlei", "Thunder", "迅雷", "Thunder Network", "XLService", "XLServicePlatform", "ThunderPlatform", "ThunderAgent", "ThunderStart", "ThunderBrowser", "XunleiBHO", "XunleiDownload", "XunleiMedia", "Xunlei.XLB", "XLLiveUD", "XLGameBox", "TBCrash", "迅雷下载助手" }, BadComponents = new [] { "XLService", "XLServicePlatform", "ThunderPlatform", "Xunlei.XLB", "ThunderBrowser", "ThunderStart", "XunleiBHO" } },
             new VendorRule { Name = "钉钉", Snark = "办公协作可以，文件右键也要塞上传入口就过界了。", Boost = 14, Patterns = new [] { "DingTalk", "Dingtalk", "dingtalk", "DingDing", "钉钉", "DingTalkShellExt", "DingTalkContextMenu", "DingTalkUpload", "DingTalkDrive", "DingTalkDocs", "DingTalkFile", "DingTalkOffice", "DingTalkLite", "AliDingTalk", "com.alibaba.dingtalk", "上传钉钉并打开", "上传到钉钉", "钉钉并打开", "钉盘" }, BadComponents = new [] { "DingTalkShellExt", "DingTalkContextMenu", "DingTalkUpload", "上传钉钉并打开", "上传到钉钉", "DingTalkDrive" } },
-            new VendorRule { Name = "腾讯系", Snark = "聊天归聊天，别顺手接管浏览器和启动项。", Boost = 12, Patterns = new [] { "Tencent", "腾讯", "QQBrowser", "QQPCMgr", "QQPCMGR", "QQProtect", "QQPCRTP", "QQRepair", "QQShellExt", "TXShell", "TIM.exe", "TIM\\", "WeChat", "微信", "企业微信", "WXWork", "TencentDocs", "腾讯文档", "QQLive", "QQMusic", "TBS", "QBCore", "QBUpdate", "电脑管家" }, BadComponents = new [] { "QQPCMgr", "QQBrowser", "QQProtect", "QQPCRTP", "QQShellExt", "TXShell", "QBUpdate" } },
-            new VendorRule { Name = "2345 系列", Snark = "名字像门牌号，行为像钉子户。", Boost = 25, Patterns = new [] { "2345", "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345PicViewer", "2345Kantuwang", "2345Zip", "2345Safe", "2345Protect", "2345Svc", "2345MiniPage", "2345Browser", "2345看图王", "2345好压", "王牌" }, BadComponents = new [] { "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345Zip", "2345Protect", "2345MiniPage" } },
-            new VendorRule { Name = "猎豹 / 金山毒霸", Snark = "安全软件当然能安全，问题是别把自己藏成常驻钉子。", Boost = 18, Patterns = new [] { "Cheetah", "猎豹", "Liebao", "Kingsoft Internet Security", "金山毒霸", "KSafe", "KSafeSvc", "KWatch", "kismain", "kavsrv", "KAV", "KSafeTray", "KMailMon", "KSoft" }, BadComponents = new [] { "KSafeSvc", "KWatch", "kavsrv", "KSafeTray", "Cheetah" } },
+            new VendorRule { Name = "腾讯系", Snark = "聊天归聊天，别顺手接管浏览器和启动项。", Boost = 12, Patterns = new [] { "Tencent", "腾讯", "QQBrowser", "QQPCMgr", "QQPCMGR", "QQProtect", "QQPCRTP", "QQRepair", "QQShellExt", "TXShell", "TIM.exe", "TIM\\", "WeChat", "微信", "企业微信", "WXWork", "TencentDocs", "腾讯文档", "QQLive", "QQMusic", "QBCore", "QBUpdate", "电脑管家" }, BadComponents = new [] { "QQPCMgr", "QQBrowser", "QQProtect", "QQPCRTP", "QQShellExt", "TXShell", "QBUpdate" } },
+            new VendorRule { Name = "2345 系列", Snark = "名字像门牌号，行为像钉子户。", Boost = 25, Patterns = new [] { "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345PicViewer", "2345Kantuwang", "2345Zip", "2345Safe", "2345Protect", "2345Svc", "2345MiniPage", "2345Browser", "2345看图王", "2345好压", "王牌" }, BadComponents = new [] { "2345Explorer", "2345Soft", "2345SoftMgr", "2345Pic", "2345Zip", "2345Protect", "2345MiniPage" } },
+            new VendorRule { Name = "猎豹 / 金山毒霸", Snark = "安全软件当然能安全，问题是别把自己藏成常驻钉子。", Boost = 18, Patterns = new [] { "Cheetah", "猎豹", "Liebao", "Kingsoft Internet Security", "金山毒霸", "KSafe", "KSafeSvc", "KWatch", "kismain", "kavsrv", "KSafeTray", "KMailMon", "KSoft" }, BadComponents = new [] { "KSafeSvc", "KWatch", "kavsrv", "KSafeTray", "Cheetah" } },
             new VendorRule { Name = "驱动/硬件检测工具", Snark = "修驱动可以，常驻当监工就过分了。", Boost = 18, Patterns = new [] { "DriverGenius", "DriverLife", "DriveTheLife", "驱动精灵", "驱动人生", "MyDrivers", "DrvMgr", "DGDaemon", "DTLService", "LuDaShi", "鲁大师", "MasterLu", "LdsLite", "LdsSvc", "LdsDaemon", "ComputerZ", "HardwareProtect" }, BadComponents = new [] { "DriverGenius", "DriverLife", "DriveTheLife", "LuDaShi", "MasterLu", "LdsSvc", "LdsDaemon" } },
             new VendorRule { Name = "Bandisoft 看图/压缩工具", Snark = "看图软件也要在右键菜单刷存在感。", Boost = 12, Patterns = new [] { "Bandisoft", "BandiView", "BandiView.exe", "Bandiview", "Honeyview", "HoneyView", "Bandizip", "BandiZip", "BandizipShellext", "BandizipShell", "BandiViewShell", "BandiViewExt", "BandiViewShellExt", "Open with BandiView", "Browse with BandiView", "用 BandiView", "使用 BandiView" }, BadComponents = new [] { "BandiViewShell", "BandiViewExt", "BandiViewShellExt", "BandizipShellext", "BandizipShell" } },
             new VendorRule { Name = "国产压缩/看图工具", Snark = "压缩包还没打开，右键先被挤爆了。", Boost = 12, Patterns = new [] { "KuaiZip", "快压", "Kuaizip", "HaoZip", "好压", "2345Zip", "360压缩", "360zip", "2345Pic", "2345看图王", "XnViewShell", "KanPic", "看图王", "极速看图", "JisuPic" }, BadComponents = new [] { "KuaiZip", "Kuaizip", "HaoZip", "2345Zip", "360zip", "2345Pic" } },
             new VendorRule { Name = "国产浏览器/导航", Snark = "浏览器自己跑就行，别把下载、主页和启动项全包了。", Boost = 16, Patterns = new [] { "SogouExplorer", "搜狗高速浏览器", "QQBrowser", "360se", "360Chrome", "2345Explorer", "2345Browser", "Liebao", "猎豹浏览器", "CheetahBrowser", "Maxthon", "傲游", "UCBrowser", "UCBrowser", "TheWorld", "世界之窗", "BaiduBrowser", "百度浏览器" }, BadComponents = new [] { "SogouExplorer", "QQBrowser", "2345Explorer", "CheetahBrowser", "UCService", "BaiduBrowser" } },
             new VendorRule { Name = "Flash 中国特供组件", Snark = "Flash 都退役了，助手还想在后台上班。", Boost = 22, Patterns = new [] { "FlashHelperService", "Flash Center", "FlashCenter", "Flash大厅", "FlashHelper", "FlashRepair", "FlashService", "flash.cn" }, BadComponents = new [] { "FlashHelperService", "FlashCenter", "FlashHelper" } },
             new VendorRule { Name = "手机助手/设备助手", Snark = "连一次手机，后台服务倒是记住一辈子。", Boost = 12, Patterns = new [] { "i4Tools", "爱思助手", "Aisi", "PP助手", "PPAssistant", "91助手", "91Assistant", "Wandoujia", "豌豆荚", "BaiduMobile", "TencentMobileManager", "应用宝", "HiSuite", "华为手机助手", "MiPhoneAssistant", "小米助手" }, BadComponents = new [] { "i4Tools", "PPAssistant", "91Assistant", "Wandoujia", "TencentMobileManager" } },
-            new VendorRule { Name = "国产影音/游戏大厅", Snark = "看个视频玩个游戏，不需要抢文件关联和开机席位。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Qiyi", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风", "Baofeng", "QQLive", "TencentVideo", "腾讯视频", "XunleiMedia", "XMP", "Bilibili", "芒果TV", "MangoTV", "WeGame", "SteamChina" }, BadComponents = new [] { "iQIYI", "Qiyi", "Youku", "Kugou", "Kuwo", "PPTV", "Baofeng", "QQLive", "TencentVideo" } },
-            new VendorRule { Name = "PDF/办公捆绑工具", Snark = "读个 PDF，也别顺手接管全系统打开方式。", Boost = 10, Patterns = new [] { "JisuPDF", "极速PDF", "SwiftPDF", "迅捷PDF", "Foxit", "福昕", "CAJViewer", "CAJ", "PDFReader", "PDFSuite", "PDFMaster", "嗨格式", "HiFormat" }, BadComponents = new [] { "JisuPDF", "SwiftPDF", "PDFMaster", "HiFormat" } },
+            new VendorRule { Name = "国产影音/游戏大厅", Snark = "看个视频玩个游戏，不需要抢文件关联和开机席位。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Qiyi", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风", "Baofeng", "QQLive", "TencentVideo", "腾讯视频", "XunleiMedia", "Bilibili", "芒果TV", "MangoTV", "WeGame", "SteamChina" }, BadComponents = new [] { "iQIYI", "Qiyi", "Youku", "Kugou", "Kuwo", "PPTV", "Baofeng", "QQLive", "TencentVideo" } },
+            new VendorRule { Name = "PDF/办公捆绑工具", Snark = "读个 PDF，也别顺手接管全系统打开方式。", Boost = 10, Patterns = new [] { "JisuPDF", "极速PDF", "SwiftPDF", "迅捷PDF", "Foxit", "福昕", "CAJViewer", "PDFReader", "PDFSuite", "PDFMaster", "嗨格式", "HiFormat" }, BadComponents = new [] { "JisuPDF", "SwiftPDF", "PDFMaster", "HiFormat" } },
             new VendorRule { Name = "预装管家/厂商助手", Snark = "出厂自带不等于可以偷偷常驻。", Boost = 8, Patterns = new [] { "LenovoUtility", "LenovoVantage", "联想电脑管家", "LenovoPcManager", "Huawei PC Manager", "华为电脑管家", "HonorPCManager", "荣耀电脑管家", "MiService", "小米电脑管家", "MyASUS", "华硕电脑管家", "AcerCare", "Dell SupportAssist" }, BadComponents = new [] { "LenovoPcManager", "Huawei PC Manager", "HonorPCManager", "MiService", "SupportAssist" } },
             new VendorRule { Name = "弹窗广告/推广组件", Snark = "关掉没一会儿又弹，这类小广告最会装死。", Boost = 22, Patterns = new [] { "SogouNews", "SogouPopup", "SogouTips", "SogouAd", "SogouInputPop", "2345MiniPage", "MiniNews", "HotNews", "NewsPop", "PopNews", "PopWnd", "AdPop", "AdService", "AdPush", "WpsNotify", "KNotify", "BaiduTips", "BaiduNews", "QQBrowserMini", "KugouTips", "KuwoNews", "QiyiNews", "YoukuNews", "LuDaShiNews", "MasterLuMini", "DriverGeniusNews", "KuaiZipNews", "HaoZipMiniPage", "今日热点", "每日热点", "热点资讯", "迷你页", "推荐弹窗", "广告弹窗" }, BadComponents = new [] { "SogouNews", "SogouPopup", "2345MiniPage", "AdPop", "AdService", "WpsNotify", "BaiduTips", "LuDaShiNews", "KuaiZipNews" } },
             new VendorRule { Name = "守护/自动恢复组件", Snark = "你关它一次，它守护进程能把自己续上三回。", Boost = 20, Patterns = new [] { "QHWatchdog", "QHProtected", "QHActiveDefense", "SGImeGuard", "SogouImeBroker", "XLServicePlatform", "ThunderPlatform", "BaiduYunDetect", "YunDetectService", "BaiduNetdiskUtility", "QQProtect", "QQPCRTP", "2345Protect", "2345Svc", "KSafeSvc", "KWatch", "LdsDaemon", "LdsSvc", "FlashHelperService", "FlashCenter", "DriverGeniusDaemon", "DTLService", "LuDaShiDaemon" }, BadComponents = new [] { "QHWatchdog", "QHProtected", "SGImeGuard", "XLServicePlatform", "BaiduYunDetect", "QQProtect", "2345Protect", "KSafeSvc", "LdsDaemon", "FlashHelperService" } }
         };
 
-        public static string ResolveVendor(string text)
+        private sealed class CandidateScore
         {
-            VendorRule rule = ResolveVendorRule(text);
-            return rule == null ? "未知第三方" : rule.Name;
+            public VendorRule Rule;
+            public int Score;
+            public bool Strong;
+            public readonly HashSet<string> Sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public readonly List<string> Reasons = new List<string>();
         }
 
-        public static int VendorBoost(string text)
+        private sealed class FileIdentity
         {
-            VendorRule rule = ResolveVendorRule(text);
-            if (rule == null) return 0;
-            int score = 35 + rule.Boost;
-            foreach (string item in rule.BadComponents)
+            public string Path;
+            public string Company;
+            public string Product;
+            public string Description;
+            public string Signer;
+            public bool SignatureValid;
+        }
+
+        private sealed class MsiIdentity
+        {
+            public string ProductName;
+            public string Publisher;
+            public string InstallLocation;
+            public string LocalPackage;
+        }
+
+        private sealed class InstalledOwner
+        {
+            public string Root;
+            public string Publisher;
+            public string ProductName;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WinTrustFileInfo
+        {
+            public uint StructSize;
+            [MarshalAs(UnmanagedType.LPWStr)] public string FilePath;
+            public IntPtr FileHandle;
+            public IntPtr KnownSubject;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WinTrustData
+        {
+            public uint StructSize;
+            public IntPtr PolicyCallbackData;
+            public IntPtr SipClientData;
+            public uint UiChoice;
+            public uint RevocationChecks;
+            public uint UnionChoice;
+            public IntPtr FileInfo;
+            public uint StateAction;
+            public IntPtr StateData;
+            [MarshalAs(UnmanagedType.LPWStr)] public string UrlReference;
+            public uint ProviderFlags;
+            public uint UiContext;
+        }
+
+        private static readonly object IdentityCacheGate = new object();
+        private static readonly Dictionary<string, FileIdentity> FileIdentityCache = new Dictionary<string, FileIdentity>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, MsiIdentity> MsiIdentityCache = new Dictionary<string, MsiIdentity>(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<InstalledOwner> InstalledOwners = new List<InstalledOwner>();
+        private static bool InstalledOwnersLoaded;
+        private static readonly HashSet<string> SystemHosts = new HashSet<string>(new string[]
+        {
+            "msiexec.exe", "rundll32.exe", "regsvr32.exe", "svchost.exe", "explorer.exe", "cmd.exe",
+            "powershell.exe", "pwsh.exe", "wscript.exe", "cscript.exe"
+        }, StringComparer.OrdinalIgnoreCase);
+
+        private static readonly Guid GenericVerifyV2 = new Guid("00AAC56B-CD44-11D0-8CC2-00C04FC295EE");
+
+        [DllImport("wintrust.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern uint WinVerifyTrust(IntPtr hwnd, [MarshalAs(UnmanagedType.LPStruct)] Guid actionId, IntPtr trustData);
+
+        [DllImport("msi.dll", CharSet = CharSet.Unicode)]
+        private static extern uint MsiGetProductInfo(string product, string property, StringBuilder value, ref int length);
+
+        public static VendorIdentityResult ResolveIdentity(VendorEvidence evidence)
+        {
+            if (evidence == null) evidence = new VendorEvidence();
+            EnrichEvidence(evidence);
+            List<CandidateScore> candidates = new List<CandidateScore>();
+            foreach (VendorRule rule in Vendors)
             {
-                if (Contains(text, item)) return score + 30;
+                CandidateScore candidate = ScoreRule(rule, evidence);
+                if (candidate.Score > 0) candidates.Add(candidate);
             }
-            return score;
-        }
-
-        public static bool IsKnownVendor(string text)
-        {
-            return ResolveVendorRule(text) != null;
-        }
-
-        public static bool HasBadComponent(string text)
-        {
-            VendorRule rule = ResolveVendorRule(text);
-            if (rule == null) return false;
-            foreach (string item in rule.BadComponents)
+            candidates = candidates.OrderByDescending(delegate(CandidateScore item) { return item.Strong; })
+                .ThenByDescending(delegate(CandidateScore item) { return item.Score; }).ToList();
+            if (candidates.Count == 0)
             {
-                if (Contains(text, item)) return true;
+                return UnknownIdentity(false, "没有可信厂商证据");
+            }
+
+            CandidateScore best = candidates[0];
+            bool confirmed = best.Strong || (best.Score >= 70 && best.Sources.Count >= 2);
+            CandidateScore conflict = candidates.Skip(1).FirstOrDefault(delegate(CandidateScore item)
+            {
+                bool otherConfirmed = item.Strong || (item.Score >= 70 && item.Sources.Count >= 2);
+                if (!otherConfirmed) return false;
+                if (best.Strong && item.Strong) return true;
+                return Math.Abs(best.Score - item.Score) < 25;
+            });
+            if (conflict != null)
+            {
+                return UnknownIdentity(true, "强证据冲突：" + best.Rule.Name + " / " + conflict.Rule.Name);
+            }
+            if (!confirmed)
+            {
+                return UnknownIdentity(false, "证据不足：" + string.Join("，", best.Reasons.Take(3).ToArray()));
+            }
+            return new VendorIdentityResult
+            {
+                Vendor = best.Rule.Name,
+                Confidence = Math.Min(100, best.Strong ? Math.Max(95, best.Score) : best.Score),
+                Confirmed = true,
+                Conflicted = false,
+                EvidenceSummary = string.Join("，", best.Reasons.Distinct().Take(5).ToArray())
+            };
+        }
+
+        public static bool HasBadComponent(VendorEvidence evidence, VendorIdentityResult identity)
+        {
+            if (evidence == null || identity == null || !identity.Confirmed) return false;
+            VendorRule rule = Vendors.FirstOrDefault(delegate(VendorRule item) { return item.Name == identity.Vendor; });
+            if (rule == null) return false;
+            IEnumerable<string> values = evidence.HumanTexts.Concat(evidence.ProductNames).Concat(evidence.TechnicalIdentifiers)
+                .Concat(evidence.FilePaths.Select(delegate(string value) { return SafePathFileName(value); }));
+            foreach (string value in values)
+            {
+                foreach (string pattern in rule.BadComponents)
+                {
+                    if (SafePatternMatch(value, pattern, true)) return true;
+                }
             }
             return false;
         }
 
-        private static VendorRule ResolveVendorRule(string text)
+        public static int VendorBoost(VendorIdentityResult identity, bool badComponent)
         {
-            foreach (VendorRule rule in Vendors)
+            if (identity == null || !identity.Confirmed) return 0;
+            VendorRule rule = Vendors.FirstOrDefault(delegate(VendorRule item) { return item.Name == identity.Vendor; });
+            if (rule == null) return 0;
+            return 35 + rule.Boost + (badComponent ? 30 : 0);
+        }
+
+        private static CandidateScore ScoreRule(VendorRule rule, VendorEvidence evidence)
+        {
+            CandidateScore candidate = new CandidateScore { Rule = rule };
+            ScoreValues(candidate, rule, evidence.Publishers, "Publisher", 60, false, false);
+            ScoreValues(candidate, rule, evidence.ProductNames, "Product", 45, false, false);
+            ScoreValues(candidate, rule, evidence.HumanTexts, "Human", 40, false, false);
+            ScoreValues(candidate, rule, evidence.TechnicalIdentifiers, "Technical", 40, true, false);
+            ScoreValues(candidate, rule, evidence.FilePaths, "Path", 30, true, false);
+            foreach (string path in evidence.FilePaths)
             {
-                foreach (string pattern in rule.Patterns)
+                FileIdentity file = GetFileIdentity(path);
+                if (file == null) continue;
+                if (file.SignatureValid) ScoreValues(candidate, rule, new string[] { file.Signer }, "Signature:" + file.Path, 100, false, true);
+                ScoreValues(candidate, rule, new string[] { file.Company }, "Company:" + file.Path, 60, false, false);
+                ScoreValues(candidate, rule, new string[] { file.Product, file.Description }, "FileProduct:" + file.Path, 45, false, false);
+            }
+            return candidate;
+        }
+
+        private static void ScoreValues(CandidateScore candidate, VendorRule rule, IEnumerable<string> values, string source, int score, bool technical, bool strong)
+        {
+            if (values == null) return;
+            int index = 0;
+            foreach (string value in values)
+            {
+                if (string.IsNullOrWhiteSpace(value)) { index++; continue; }
+                string pattern = MatchingPattern(rule, value, technical);
+                if (!string.IsNullOrEmpty(pattern))
                 {
-                    if (Contains(text, pattern)) return rule;
+                    string sourceKey = source + ":" + index;
+                    if (candidate.Sources.Add(sourceKey)) candidate.Score += score;
+                    candidate.Strong = candidate.Strong || strong;
+                    candidate.Reasons.Add(source.Split(':')[0] + "=" + pattern);
                 }
+                index++;
+            }
+        }
+
+        private static string MatchingPattern(VendorRule rule, string value, bool technical)
+        {
+            foreach (string pattern in rule.Patterns)
+            {
+                if (technical && pattern.Length < 5 && pattern.All(delegate(char c) { return c < 128; })) continue;
+                bool distinctive = rule.BadComponents.Any(delegate(string item) { return item.Equals(pattern, StringComparison.OrdinalIgnoreCase); });
+                if (SafePatternMatch(value, pattern, technical && !distinctive)) return pattern;
             }
             return null;
         }
 
-        private static bool Contains(string text, string pattern)
+        private static bool SafePatternMatch(string text, string pattern, bool technical)
         {
-            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(pattern)) return false;
-            return text.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(pattern)) return false;
+            int start = 0;
+            while (true)
+            {
+                int index = text.IndexOf(pattern, start, StringComparison.OrdinalIgnoreCase);
+                if (index < 0) return false;
+                bool alphaNumeric = pattern.All(delegate(char c) { return char.IsLetterOrDigit(c); });
+                bool boundaryRequired = alphaNumeric && (technical || pattern.Length <= 4 || pattern.All(char.IsDigit));
+                if (!boundaryRequired) return true;
+                int end = index + pattern.Length;
+                bool leftBoundary = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
+                bool rightBoundary = end >= text.Length || !char.IsLetterOrDigit(text[end]);
+                if (leftBoundary && rightBoundary) return true;
+                start = index + 1;
+            }
+        }
+
+        private static void EnrichEvidence(VendorEvidence evidence)
+        {
+            foreach (string command in evidence.Commands.ToArray())
+            {
+                string file = ExtractTargetFile(command);
+                if (!string.IsNullOrEmpty(file)) evidence.AddFile(file);
+                string productCode = ExtractProductCode(command);
+                if (!string.IsNullOrEmpty(productCode)) evidence.AddMsi(productCode);
+            }
+            foreach (string value in evidence.MsiProductCodes.ToArray())
+            {
+                string productCode = ExtractProductCode(value);
+                if (string.IsNullOrEmpty(productCode)) continue;
+                MsiIdentity msi = GetMsiIdentity(productCode);
+                if (msi == null) continue;
+                evidence.AddPublisher(msi.Publisher).AddProduct(msi.ProductName).AddFile(msi.LocalPackage);
+                if (!string.IsNullOrWhiteSpace(msi.InstallLocation)) evidence.AddFile(msi.InstallLocation);
+            }
+            foreach (string value in evidence.FilePaths.ToArray())
+            {
+                string file = NormalizeCandidateFile(value);
+                if (!string.IsNullOrEmpty(file)) evidence.AddFile(file);
+            }
+            EnrichInstalledOwnership(evidence);
+        }
+
+        private static void EnrichInstalledOwnership(VendorEvidence evidence)
+        {
+            EnsureInstalledOwners();
+            foreach (string value in evidence.FilePaths.ToArray())
+            {
+                string normalized;
+                try { normalized = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value.Trim().Trim('\"'))).TrimEnd('\\') + "\\"; }
+                catch { continue; }
+                List<InstalledOwner> owners;
+                lock (IdentityCacheGate) owners = InstalledOwners.ToList();
+                foreach (InstalledOwner owner in owners)
+                {
+                    if (!normalized.StartsWith(owner.Root, StringComparison.OrdinalIgnoreCase)) continue;
+                    evidence.AddPublisher(owner.Publisher).AddProduct(owner.ProductName);
+                }
+            }
+        }
+
+        private static void EnsureInstalledOwners()
+        {
+            lock (IdentityCacheGate)
+            {
+                if (InstalledOwnersLoaded) return;
+            }
+            List<InstalledOwner> loaded = new List<InstalledOwner>();
+            foreach (RegistryHive hive in new RegistryHive[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
+            {
+                foreach (RegistryView view in new RegistryView[] { RegistryView.Registry64, RegistryView.Registry32 })
+                {
+                    try
+                    {
+                        using (RegistryKey root = RegistryKey.OpenBaseKey(hive, view).OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall"))
+                        {
+                            if (root == null) continue;
+                            foreach (string childName in root.GetSubKeyNames())
+                            {
+                                try
+                                {
+                                    using (RegistryKey child = root.OpenSubKey(childName))
+                                    {
+                                        if (child == null) continue;
+                                        string product = Convert.ToString(child.GetValue("DisplayName", ""));
+                                        string publisher = Convert.ToString(child.GetValue("Publisher", ""));
+                                        string installLocation = Convert.ToString(child.GetValue("InstallLocation", ""));
+                                        string displayIcon = Convert.ToString(child.GetValue("DisplayIcon", ""));
+                                        string ownerRoot = NormalizeInstallRoot(installLocation, displayIcon);
+                                        if (string.IsNullOrEmpty(ownerRoot) || (string.IsNullOrWhiteSpace(product) && string.IsNullOrWhiteSpace(publisher))) continue;
+                                        loaded.Add(new InstalledOwner { Root = ownerRoot, Publisher = publisher, ProductName = product });
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            lock (IdentityCacheGate)
+            {
+                if (InstalledOwnersLoaded) return;
+                foreach (InstalledOwner owner in loaded.OrderByDescending(delegate(InstalledOwner item) { return item.Root.Length; }))
+                {
+                    if (!InstalledOwners.Any(delegate(InstalledOwner item) { return item.Root.Equals(owner.Root, StringComparison.OrdinalIgnoreCase) && item.ProductName.Equals(owner.ProductName, StringComparison.OrdinalIgnoreCase); }))
+                        InstalledOwners.Add(owner);
+                }
+                InstalledOwnersLoaded = true;
+            }
+        }
+
+        private static string NormalizeInstallRoot(string installLocation, string displayIcon)
+        {
+            string value = installLocation;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                string icon = NormalizeCandidateFile(displayIcon);
+                if (!string.IsNullOrEmpty(icon)) value = Path.GetDirectoryName(icon);
+            }
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            try { return Path.GetFullPath(Environment.ExpandEnvironmentVariables(value.Trim().Trim('\"'))).TrimEnd('\\') + "\\"; }
+            catch { return string.Empty; }
+        }
+
+        private static string ExtractTargetFile(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) return string.Empty;
+            string expanded = Environment.ExpandEnvironmentVariables(command.Trim());
+            string first = ExtractFirstPath(expanded);
+            string host = SafePathFileName(first);
+            if (!SystemHosts.Contains(host)) return first;
+            if (host.Equals("rundll32.exe", StringComparison.OrdinalIgnoreCase) || host.Equals("regsvr32.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                string remainder = expanded.Substring(Math.Min(expanded.Length, expanded.IndexOf(first, StringComparison.OrdinalIgnoreCase) + first.Length)).Trim().TrimStart(',');
+                string target = ExtractFirstPath(remainder);
+                int comma = target.IndexOf(',');
+                return comma > 0 ? target.Substring(0, comma) : target;
+            }
+            return string.Empty;
+        }
+
+        private static string ExtractFirstPath(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            value = value.Trim();
+            if (value.StartsWith("\"", StringComparison.Ordinal))
+            {
+                int close = value.IndexOf('\"', 1);
+                if (close > 1) return value.Substring(1, close - 1);
+            }
+            int exe = value.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            if (exe >= 0) return value.Substring(0, exe + 4).Trim().Trim('\"');
+            int dll = value.IndexOf(".dll", StringComparison.OrdinalIgnoreCase);
+            if (dll >= 0) return value.Substring(0, dll + 4).Trim().Trim('\"');
+            int comma = value.IndexOf(',');
+            if (comma > 0) return value.Substring(0, comma).Trim().Trim('\"');
+            return value.Trim('\"');
+        }
+
+        private static string NormalizeCandidateFile(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            string path = ExtractFirstPath(Environment.ExpandEnvironmentVariables(value));
+            if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+            try
+            {
+                if (Directory.Exists(path)) return string.Empty;
+                return Path.GetFullPath(path);
+            }
+            catch { return string.Empty; }
+        }
+
+        private static string SafePathFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            try { return Path.GetFileName(value.Trim().Trim('"')); }
+            catch { return string.Empty; }
+        }
+
+        private static string ExtractProductCode(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            int start = value.IndexOf('{');
+            while (start >= 0)
+            {
+                int end = value.IndexOf('}', start + 1);
+                if (end < 0) return string.Empty;
+                string candidate = value.Substring(start, end - start + 1);
+                Guid parsed;
+                if (Guid.TryParse(candidate, out parsed)) return parsed.ToString("B").ToUpperInvariant();
+                start = value.IndexOf('{', end + 1);
+            }
+            Guid direct;
+            return Guid.TryParse(value.Trim(), out direct) ? direct.ToString("B").ToUpperInvariant() : string.Empty;
+        }
+
+        private static FileIdentity GetFileIdentity(string value)
+        {
+            string path = NormalizeCandidateFile(value);
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            lock (IdentityCacheGate)
+            {
+                FileIdentity cached;
+                if (FileIdentityCache.TryGetValue(path, out cached)) return cached;
+            }
+            FileIdentity identity = new FileIdentity { Path = path };
+            try
+            {
+                FileVersionInfo version = FileVersionInfo.GetVersionInfo(path);
+                identity.Company = version.CompanyName;
+                identity.Product = version.ProductName;
+                identity.Description = version.FileDescription;
+            }
+            catch { }
+            identity.SignatureValid = IsTrustedFile(path);
+            if (identity.SignatureValid)
+            {
+                try
+                {
+                    using (X509Certificate2 certificate = new X509Certificate2(X509Certificate.CreateFromSignedFile(path)))
+                    {
+                        identity.Signer = certificate.Subject;
+                    }
+                }
+                catch { identity.SignatureValid = false; }
+            }
+            lock (IdentityCacheGate) FileIdentityCache[path] = identity;
+            return identity;
+        }
+
+        private static bool IsTrustedFile(string path)
+        {
+            IntPtr filePointer = IntPtr.Zero;
+            IntPtr dataPointer = IntPtr.Zero;
+            try
+            {
+                WinTrustFileInfo file = new WinTrustFileInfo
+                {
+                    StructSize = (uint)Marshal.SizeOf(typeof(WinTrustFileInfo)),
+                    FilePath = path,
+                    FileHandle = IntPtr.Zero,
+                    KnownSubject = IntPtr.Zero
+                };
+                filePointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(WinTrustFileInfo)));
+                Marshal.StructureToPtr(file, filePointer, false);
+                WinTrustData data = new WinTrustData
+                {
+                    StructSize = (uint)Marshal.SizeOf(typeof(WinTrustData)),
+                    UiChoice = 2,
+                    RevocationChecks = 0,
+                    UnionChoice = 1,
+                    FileInfo = filePointer,
+                    StateAction = 0,
+                    ProviderFlags = 0x00001000,
+                    UiContext = 0
+                };
+                dataPointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(WinTrustData)));
+                Marshal.StructureToPtr(data, dataPointer, false);
+                return WinVerifyTrust(new IntPtr(-1), GenericVerifyV2, dataPointer) == 0;
+            }
+            catch { return false; }
+            finally
+            {
+                if (dataPointer != IntPtr.Zero) Marshal.FreeHGlobal(dataPointer);
+                if (filePointer != IntPtr.Zero) Marshal.FreeHGlobal(filePointer);
+            }
+        }
+
+        private static MsiIdentity GetMsiIdentity(string productCode)
+        {
+            lock (IdentityCacheGate)
+            {
+                MsiIdentity cached;
+                if (MsiIdentityCache.TryGetValue(productCode, out cached)) return cached;
+            }
+            MsiIdentity identity = new MsiIdentity
+            {
+                ProductName = MsiProperty(productCode, "ProductName"),
+                Publisher = MsiProperty(productCode, "Publisher"),
+                InstallLocation = MsiProperty(productCode, "InstallLocation"),
+                LocalPackage = MsiProperty(productCode, "LocalPackage")
+            };
+            lock (IdentityCacheGate) MsiIdentityCache[productCode] = identity;
+            return identity;
+        }
+
+        private static string MsiProperty(string productCode, string property)
+        {
+            try
+            {
+                int length = 0;
+                uint first = MsiGetProductInfo(productCode, property, null, ref length);
+                if (first != 0 && first != 234) return string.Empty;
+                StringBuilder value = new StringBuilder(length + 1);
+                uint result = MsiGetProductInfo(productCode, property, value, ref length);
+                return result == 0 ? value.ToString() : string.Empty;
+            }
+            catch { return string.Empty; }
+        }
+
+        private static VendorIdentityResult UnknownIdentity(bool conflicted, string reason)
+        {
+            return new VendorIdentityResult { Vendor = "未知第三方", Confidence = 0, Confirmed = false, Conflicted = conflicted, EvidenceSummary = reason };
+        }
+
+        public static List<string> RunIdentitySelfTests()
+        {
+            List<string> failures = new List<string>();
+            AssertUnknown(failures, "Corel GUID 不得命中 2345", new VendorEvidence()
+                .AddHuman("CorelDRAW Graphics Suite 2021 - IPM Content BR (x64)")
+                .AddPublisher("Corel Corporation").AddMsi("{3D6825D1-5843-4585-B915-A9F234554C2C}")
+                .AddOpaque(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{3D6825D1-5843-4585-B915-A9F234554C2C}"));
+            AssertUnknown(failures, "裸 2345 不能确认厂商", new VendorEvidence().AddHuman("2345").AddTechnical("A9F234554C2C"));
+            AssertUnknown(failures, "系统 MSI 宿主不能成为厂商证据", new VendorEvidence()
+                .AddCommand(@"C:\Windows\System32\msiexec.exe /I{3D6825D1-5843-4585-B915-A9F234554C2C}")
+                .AddOpaque("{3D6825D1-5843-4585-B915-A9F234554C2C}"));
+            AssertUnknown(failures, "Thunderbird 不能命中迅雷", new VendorEvidence()
+                .AddHuman("Mozilla Thunderbird").AddTechnical("Thunderbird").AddFile(@"C:\Program Files\Mozilla Thunderbird\thunderbird.exe"));
+            AssertUnknown(failures, "普通 TBS/XMP/KAV/CAJ 缩写不能确认厂商", new VendorEvidence()
+                .AddHuman("TBS XMP KAV CAJ").AddTechnical("TBS_XMP_KAV_CAJ"));
+
+            VendorIdentityResult sogou = ResolveIdentity(new VendorEvidence().AddHuman("搜狗输入法").AddPublisher("Sogou.com").AddProduct("Sogou Input Method"));
+            if (!sogou.Confirmed || sogou.Vendor != "搜狗") failures.Add("明确 Publisher+产品名未识别为搜狗");
+
+            VendorIdentityResult conflict = ResolveIdentity(new VendorEvidence()
+                .AddPublisher("Sogou.com", "Thunder Network Technologies")
+                .AddProduct("Sogou Input Method", "Xunlei Thunder Download"));
+            if (!conflict.Conflicted || conflict.Confirmed) failures.Add("相互冲突的强组合证据未被阻断");
+
+            foreach (VendorRule rule in Vendors)
+            {
+                foreach (string pattern in rule.Patterns)
+                {
+                    VendorIdentityResult opaque = ResolveIdentity(new VendorEvidence()
+                        .AddOpaque("GUID-{A9F" + pattern + "55C2C}", @"HKLM\Software\Classes\" + pattern));
+                    if (opaque.Confirmed) failures.Add("不透明字段误命中：" + rule.Name + " / " + pattern);
+
+                    VendorIdentityResult pathOnly = ResolveIdentity(new VendorEvidence()
+                        .AddFile(@"C:\Unrelated\A9F" + pattern + @"55C2C\tool.exe"));
+                    if (pathOnly.Confirmed) failures.Add("单一路径片段误命中：" + rule.Name + " / " + pattern);
+                }
+            }
+            return failures;
+        }
+
+        private static void AssertUnknown(List<string> failures, string name, VendorEvidence evidence)
+        {
+            VendorIdentityResult result = ResolveIdentity(evidence);
+            if (result.Confirmed || result.Vendor != "未知第三方") failures.Add(name + "：实际为 " + result.Vendor + "，" + result.EvidenceSummary);
+        }
+
+        public static string ResolveVendor(string text)
+        {
+            return ResolveIdentity(new VendorEvidence().AddHuman(text)).Vendor;
+        }
+
+        public static int VendorBoost(string text)
+        {
+            VendorIdentityResult identity = ResolveIdentity(new VendorEvidence().AddHuman(text));
+            return VendorBoost(identity, false);
+        }
+
+        public static bool IsKnownVendor(string text)
+        {
+            return ResolveIdentity(new VendorEvidence().AddHuman(text)).Confirmed;
+        }
+
+        public static bool HasBadComponent(string text)
+        {
+            VendorEvidence evidence = new VendorEvidence().AddHuman(text).AddTechnical(text);
+            VendorIdentityResult identity = ResolveIdentity(evidence);
+            return HasBadComponent(evidence, identity);
         }
     }
 
@@ -636,17 +1226,10 @@ namespace RogueCleanerV2
             scanners.Add(delegate { AddRange(all, gate, sink, "隐藏卸载入口", ScanHiddenInstalledComponents()); });
             scanners.Add(delegate { AddRange(all, gate, sink, "正在运行的弹窗/守护", ScanRunningAdAndGuardProcesses()); });
 
-            List<Task> running = new List<Task>();
-            foreach (Action scanner in scanners)
+            Parallel.Invoke(new ParallelOptions
             {
-                running.Add(Task.Factory.StartNew(scanner));
-                while (running.Count >= Math.Max(2, Math.Min(4, Environment.ProcessorCount)))
-                {
-                    int index = Task.WaitAny(running.ToArray());
-                    running.RemoveAt(index);
-                }
-            }
-            Task.WaitAll(running.ToArray());
+                MaxDegreeOfParallelism = Math.Max(2, Math.Min(4, Environment.ProcessorCount))
+            }, scanners.ToArray());
 
             List<Finding> sorted = all
                 .GroupBy(delegate(Finding f) { return f.Category + "|" + f.TechnicalLocation + "|" + f.UserVisibleName; })
@@ -698,8 +1281,13 @@ namespace RogueCleanerV2
                             string clsidText = ResolveClsidRegistration(childName, display, explorerHandler, commandStateHandler);
                             string title = FriendlyContextMenuTitle(target.SubKey, childName, display, mui, explorerHandler, commandStateHandler, clsidText);
                             string text = Join(title, childName, display, mui, explorerHandler, commandStateHandler, command, icon, appliesTo, clsidText, target.SubKey);
-                            if (!RuleCatalog.IsKnownVendor(text)) continue;
-                            list.Add(NewFinding("右键菜单", title, DescribeContextMenu(target.SubKey, title), target, text, 18));
+                            VendorEvidence evidence = new VendorEvidence().AddHuman(title, display, mui)
+                                .AddTechnical(childName, explorerHandler, commandStateHandler, clsidText).AddCommand(command, clsidText)
+                                .AddFile(icon).AddOpaque(appliesTo, target.SubKey);
+                            VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                            if (!identity.Confirmed) continue;
+                            bool badComponent = RuleCatalog.HasBadComponent(evidence, identity);
+                            list.Add(NewFinding("右键菜单", title, DescribeContextMenu(target.SubKey, title), target, text, 18, identity, badComponent));
                         }
                     }
                 }
@@ -719,12 +1307,14 @@ namespace RogueCleanerV2
                     {
                         string value = Convert.ToString(key.GetValue(valueName, ""));
                         string text = Join(valueName, value, root.SubKey);
-                        if (!RuleCatalog.IsKnownVendor(text)) continue;
+                        VendorEvidence evidence = new VendorEvidence().AddHuman(valueName).AddCommand(value).AddOpaque(root.SubKey);
+                        VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                        if (!identity.Confirmed) continue;
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryValue";
                         target.ValueName = valueName;
-                        string title = FriendlyStartupTitle(text, valueName, value);
-                        list.Add(NewFinding("开机启动", title, "开机后会自动启动：" + title, target, text, 28));
+                        string title = FriendlyStartupTitle(text, valueName, value, identity.Vendor);
+                        list.Add(NewFinding("开机启动", title, "开机后会自动启动：" + title, target, text, 28, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                     }
                 }
             }
@@ -746,9 +1336,11 @@ namespace RogueCleanerV2
                 {
                     string shortcut = ResolveShortcutText(file);
                     string text = Join(file, shortcut);
-                    if (!RuleCatalog.IsKnownVendor(text)) continue;
+                    VendorEvidence evidence = new VendorEvidence().AddHuman(Path.GetFileNameWithoutExtension(file)).AddCommand(shortcut).AddOpaque(file);
+                    VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                    if (!identity.Confirmed) continue;
                     ActionTarget target = new ActionTarget { Kind = "MoveFileToBackup", FilePath = file };
-                    list.Add(NewFinding("启动文件夹", Path.GetFileName(file), "开机后会从启动文件夹拉起：" + Join(Path.GetFileName(file), shortcut), target, text, 28));
+                    list.Add(NewFinding("启动文件夹", Path.GetFileName(file), "开机后会从启动文件夹拉起：" + Join(Path.GetFileName(file), shortcut), target, text, 28, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                 }
             }
             return list;
@@ -766,22 +1358,31 @@ namespace RogueCleanerV2
                     {
                         string value = Convert.ToString(key.GetValue(valueName, ""));
                         string text = Join(valueName, value, root.SubKey);
-                        if (!RuleCatalog.IsKnownVendor(text)) continue;
+                        VendorEvidence evidence = new VendorEvidence().AddHuman(valueName).AddTechnical(valueName).AddCommand(value).AddFile(value).AddOpaque(root.SubKey);
+                        VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                        if (!identity.Confirmed) continue;
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryValue";
                         target.ValueName = valueName;
-                        string title = FriendlyBrowserTitle(text, valueName);
-                        list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35));
+                        string title = FriendlyBrowserTitle(text, valueName, identity.Vendor);
+                        list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                     }
                     foreach (string childName in SafeSubKeyNames(key))
                     {
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryKey";
                         target.SubKey = root.SubKey + "\\" + childName;
-                        string text = Join(childName, root.SubKey);
-                        if (!RuleCatalog.IsKnownVendor(text)) continue;
-                        string title = FriendlyBrowserTitle(text, childName);
-                        list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35));
+                        string childDefault;
+                        using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
+                        {
+                            childDefault = ReadString(child, "");
+                        }
+                        string text = Join(childName, childDefault, root.SubKey);
+                        VendorEvidence evidence = new VendorEvidence().AddHuman(childName).AddTechnical(childName).AddCommand(childDefault).AddFile(childDefault).AddOpaque(root.SubKey);
+                        VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                        if (!identity.Confirmed) continue;
+                        string title = FriendlyBrowserTitle(text, childName, identity.Vendor);
+                        list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                     }
                 }
             }
@@ -809,9 +1410,12 @@ namespace RogueCleanerV2
                             string targetFolder = ReadString(child, "TargetFolderPath");
                             string clsidText = ResolveClsidRegistration(childName, display, localized, itemName);
                             string text = Join(childName, display, localized, itemName, targetFolder, ReadString(child, "CodexMarker"), clsidText, target.SubKey);
-                            if (!RuleCatalog.IsKnownVendor(text)) continue;
+                            VendorEvidence evidence = new VendorEvidence().AddHuman(display, localized, itemName).AddTechnical(clsidText)
+                                .AddCommand(clsidText).AddFile(targetFolder).AddOpaque(childName, target.SubKey);
+                            VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                            if (!identity.Confirmed) continue;
                             string title = FriendlyExplorerNamespaceTitle(target.SubKey, childName, display, localized, itemName, clsidText);
-                            list.Add(NewFinding("此电脑/资源管理器入口", title, "会在“此电脑”、资源管理器导航栏或网络位置里显示入口：" + title + "。清理只移除入口注册表，不卸载主程序。", target, text, 22));
+                            list.Add(NewFinding("此电脑/资源管理器入口", title, "会在“此电脑”、资源管理器导航栏或网络位置里显示入口：" + title + "。清理只移除入口注册表，不卸载主程序。", target, text, 22, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                         }
                     }
                 }
@@ -838,12 +1442,15 @@ namespace RogueCleanerV2
                             string server = Join(ReadChildDefault(clsidTarget, "InprocServer32"), ReadChildDefault(clsidTarget, "LocalServer32"));
                             string targetFolder = ReadChildValue(clsidTarget, @"Instance\InitPropertyBag", "TargetFolderPath");
                             string text = Join(childName, display, localized, itemName, infoTip, pinned, icon, server, targetFolder, ReadString(child, "CodexMarker"), clsidTarget.SubKey);
-                            if (!RuleCatalog.IsKnownVendor(text)) continue;
+                            VendorEvidence evidence = new VendorEvidence().AddHuman(display, localized, itemName, infoTip).AddTechnical(server)
+                                .AddCommand(server).AddFile(icon, targetFolder).AddOpaque(childName, pinned, clsidTarget.SubKey);
+                            VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                            if (!identity.Confirmed) continue;
                             ActionTarget valueTarget = CopyTarget(clsidTarget);
                             valueTarget.Kind = "DeleteRegistryValue";
                             valueTarget.ValueName = "System.IsPinnedToNameSpaceTree";
                             string title = FriendlyExplorerNamespaceTitle(clsidTarget.SubKey, childName, display, localized, itemName, text);
-                            list.Add(NewFinding("此电脑/资源管理器入口", title, "会把入口固定到资源管理器导航栏或“此电脑”附近：" + title + "。清理只取消固定入口，不卸载主程序。", valueTarget, text, 18));
+                            list.Add(NewFinding("此电脑/资源管理器入口", title, "会把入口固定到资源管理器导航栏或“此电脑”附近：" + title + "。清理只取消固定入口，不卸载主程序。", valueTarget, text, 18, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                         }
                     }
                 }
@@ -878,31 +1485,38 @@ namespace RogueCleanerV2
                             string parentKey = ReadString(child, "ParentKeyName");
                             string releaseType = ReadString(child, "ReleaseType");
                             string text = Join(childName, display, publisher, installLocation, displayIcon, uninstall, quietUninstall, systemComponent, noRemove, parentKey, releaseType, target.SubKey);
-                            if (!RuleCatalog.IsKnownVendor(text)) continue;
+                            VendorEvidence evidence = new VendorEvidence().AddPublisher(publisher).AddProduct(display)
+                                .AddFile(installLocation, displayIcon).AddCommand(uninstall, quietUninstall).AddMsi(childName, uninstall, quietUninstall)
+                                .AddOpaque(childName, systemComponent, noRemove, parentKey, releaseType, target.SubKey);
+                            VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
                             bool hidden = IsTruthy(systemComponent) ||
                                 IsTruthy(noRemove) ||
                                 string.IsNullOrWhiteSpace(display) ||
                                 string.IsNullOrWhiteSpace(uninstall) ||
                                 !string.IsNullOrWhiteSpace(parentKey);
-                            bool suspiciousComponent = hidden || LooksLikeAdOrGuard(text) || RuleCatalog.HasBadComponent(text);
+                            string behaviorText = Join(display, publisher, SafePathFileName(installLocation), SafePathFileName(displayIcon));
+                            bool adOrGuard = LooksLikeAdOrGuard(behaviorText);
+                            bool badComponent = RuleCatalog.HasBadComponent(evidence, identity);
+                            bool suspiciousComponent = adOrGuard || badComponent;
                             if (!suspiciousComponent) continue;
                             string name = string.IsNullOrWhiteSpace(display) ? childName : display;
                             string dedupeKey = Join(name, uninstall, installLocation);
                             if (!seen.Add(dedupeKey)) continue;
-                            string reason = HiddenInstallReason(display, uninstall, systemComponent, noRemove, parentKey, hidden, LooksLikeAdOrGuard(text), RuleCatalog.HasBadComponent(text));
-                            if (!string.IsNullOrWhiteSpace(uninstall))
+                            string reason = HiddenInstallReason(display, uninstall, systemComponent, noRemove, parentKey, hidden, adOrGuard, badComponent);
+                            if (identity.Confirmed && !identity.Conflicted && !string.IsNullOrWhiteSpace(uninstall))
                             {
                                 target.Kind = "InvokeUninstaller";
                                 target.UninstallCommand = uninstall;
                                 target.FilePath = installLocation;
-                                Finding finding = NewFinding("疑似捆绑/弹窗组件", name, "疑似捆绑、弹窗、守护或卸载入口异常：" + reason + "。工具只负责弹出它自己的卸载器，是否卸载由用户在卸载器里确认。", target, text, 16);
-                                finding.Risk = RuleCatalog.HasBadComponent(text) || LooksLikeAdOrGuard(text) ? "中" : "低";
+                                Finding finding = NewFinding("疑似捆绑/弹窗组件", name, "疑似捆绑、弹窗、守护或卸载入口异常：" + reason + "。工具只负责弹出它自己的卸载器，是否卸载由用户在卸载器里确认。", target, text, 16, identity, badComponent);
+                                finding.Risk = badComponent || adOrGuard ? "中" : "低";
                                 list.Add(finding);
                             }
                             else
                             {
                                 target.Kind = "ReportOnly";
-                                Finding finding = NewFinding("疑似捆绑组件/卸载入口异常", name, "安装列表可能不好找或没有正常卸载入口：" + reason + "。只提示，不一键卸载。", target, text, 5);
+                                string vendorNote = identity.Conflicted ? "厂商强证据冲突，" : (!identity.Confirmed ? "厂商身份无法可靠确认，" : string.Empty);
+                                Finding finding = NewFinding("疑似捆绑组件/卸载入口异常", name, vendorNote + "检测到独立异常行为：" + reason + "。只提示，不一键卸载。", target, text, 5, identity, badComponent);
                                 finding.Risk = "低";
                                 list.Add(finding);
                             }
@@ -928,10 +1542,11 @@ namespace RogueCleanerV2
                         string command = Convert.ToString(process["CommandLine"]);
                         string identity = Join(name, path);
                         string text = Join(pid, name, path, command);
-                        if (!RuleCatalog.IsKnownVendor(identity)) continue;
                         if (!LooksLikeAdOrGuard(identity)) continue;
+                        VendorEvidence evidence = new VendorEvidence().AddHuman(name).AddTechnical(name).AddFile(path).AddCommand(command).AddOpaque(pid);
+                        VendorIdentityResult vendorIdentity = RuleCatalog.ResolveIdentity(evidence);
                         ActionTarget target = new ActionTarget { Kind = "ReportOnly", FilePath = Join(name, path, "PID=" + pid) };
-                        Finding finding = NewFinding("正在运行/疑似弹窗守护", name, "后台正在运行，像是弹窗、推广、守护或自动恢复组件：" + Join(name, path), target, text, 12);
+                        Finding finding = NewFinding("正在运行/疑似弹窗守护", name, "后台正在运行，像是弹窗、推广、守护或自动恢复组件：" + Join(name, path), target, text, 12, vendorIdentity, RuleCatalog.HasBadComponent(evidence, vendorIdentity));
                         finding.Risk = "低";
                         list.Add(finding);
                     }
@@ -964,11 +1579,13 @@ namespace RogueCleanerV2
                             {
                                 string command = ReadDefault(classTarget, @"shell\open\command");
                                 string text = Join(ext, defaultProgId, command);
-                                if (classKey != null && RuleCatalog.IsKnownVendor(text))
+                                VendorEvidence evidence = new VendorEvidence().AddTechnical(defaultProgId).AddCommand(command).AddOpaque(ext, classTarget.SubKey);
+                                VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                                if (classKey != null && identity.Confirmed)
                                 {
                                     classTarget.Kind = "ReportOnly";
                                     string title = ext + " 默认打开：" + FriendlyHandler(defaultProgId);
-                                    list.Add(NewFinding("文件关联/默认打开程序", title, "双击/打开 " + ext + " 现在会交给：" + FriendlyHandler(defaultProgId) + "。这类属于主打开方式，只提示，不一键改。", classTarget, text, 8));
+                                    list.Add(NewFinding("文件关联/默认打开程序", title, "双击/打开 " + ext + " 现在会交给：" + FriendlyHandler(defaultProgId) + "。这类属于主打开方式，只提示，不一键改。", classTarget, text, 8, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                                 }
                             }
                         }
@@ -982,13 +1599,18 @@ namespace RogueCleanerV2
                                 foreach (string valueName in SafeValueNames(subKey))
                                 {
                                     if (string.Equals(valueName, "MRUList", StringComparison.OrdinalIgnoreCase)) continue;
-                                    string text = Join(ext, valueName, subTarget.SubKey);
-                                    if (!RuleCatalog.IsKnownVendor(text)) continue;
+                                    ActionTarget progTarget = CopyTarget(extTarget);
+                                    progTarget.SubKey = @"Software\Classes\" + valueName;
+                                    string command = ReadDefault(progTarget, @"shell\open\command");
+                                    string text = Join(ext, valueName, command, subTarget.SubKey);
+                                    VendorEvidence evidence = new VendorEvidence().AddTechnical(valueName).AddCommand(command).AddOpaque(ext, subTarget.SubKey);
+                                    VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                                    if (!identity.Confirmed) continue;
                                     ActionTarget valueTarget = CopyTarget(subTarget);
                                     valueTarget.Kind = "DeleteRegistryValue";
                                     valueTarget.ValueName = valueName;
                                     string title = ext + " 打开方式：" + FriendlyHandler(valueName);
-                                    list.Add(NewFinding("文件关联/打开方式", title, "右键“打开方式”里会出现：" + FriendlyHandler(valueName) + "（影响 " + ext + " 文件）", valueTarget, text, 22));
+                                    list.Add(NewFinding("文件关联/打开方式", title, "右键“打开方式”里会出现：" + FriendlyHandler(valueName) + "（影响 " + ext + " 文件）", valueTarget, text, 22, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                                 }
                             }
                         }
@@ -1015,10 +1637,12 @@ namespace RogueCleanerV2
                         if (mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase)) continue;
                         if (IsWindowsNativeService(name, display, path, desc)) continue;
                         string text = Join(name, display, path, desc, mode);
-                        if (!RuleCatalog.IsKnownVendor(text)) continue;
+                        VendorEvidence evidence = new VendorEvidence().AddHuman(display, desc).AddTechnical(name).AddCommand(path).AddOpaque(mode);
+                        VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                        if (!identity.Confirmed) continue;
                         ActionTarget target = new ActionTarget { Kind = "DisableService", ServiceName = name };
-                        string title = FriendlyServiceTitle(text, name, display);
-                        Finding finding = NewFinding("后台服务", title, "后台服务会常驻或被系统拉起：" + title + "。原服务名：" + name, target, text, 42);
+                        string title = FriendlyServiceTitle(text, name, display, identity.Vendor);
+                        Finding finding = NewFinding("后台服务", title, "后台服务会常驻或被系统拉起：" + title + "。原服务名：" + name, target, text, 42, identity, RuleCatalog.HasBadComponent(evidence, identity));
                         finding.RequiresAdmin = true;
                         list.Add(finding);
                     }
@@ -1073,20 +1697,30 @@ namespace RogueCleanerV2
                 string name = Convert.ToString(task.Name);
                 string path = Convert.ToString(task.Path);
                 string text = path;
-                try { text = Join(text, Convert.ToString(task.Definition.RegistrationInfo.Description)); } catch { }
+                string description = string.Empty;
+                try { description = Convert.ToString(task.Definition.RegistrationInfo.Description); text = Join(text, description); } catch { }
+                VendorEvidence evidence = new VendorEvidence().AddHuman(description).AddTechnical(name).AddOpaque(path);
                 try
                 {
                     foreach (dynamic action in task.Definition.Actions)
                     {
-                        try { text = Join(text, Convert.ToString(action.Path), Convert.ToString(action.Arguments)); } catch { }
+                        try
+                        {
+                            string actionPath = Convert.ToString(action.Path);
+                            string arguments = Convert.ToString(action.Arguments);
+                            text = Join(text, actionPath, arguments);
+                            evidence.AddFile(actionPath).AddCommand(Join(actionPath, arguments));
+                        }
+                        catch { }
                     }
                 }
                 catch { }
-                if (RuleCatalog.IsKnownVendor(text))
+                VendorIdentityResult identity = RuleCatalog.ResolveIdentity(evidence);
+                if (identity.Confirmed)
                 {
                     ActionTarget target = new ActionTarget { Kind = "DisableScheduledTask", TaskName = path };
-                    string title = FriendlyTaskTitle(text, name);
-                    Finding finding = NewFinding("计划任务/定时拉起", title, "会按计划自动拉起：" + title + "。原任务名：" + name, target, text, 30);
+                    string title = FriendlyTaskTitle(text, name, identity.Vendor);
+                    Finding finding = NewFinding("计划任务/定时拉起", title, "会按计划自动拉起：" + title + "。原任务名：" + name, target, text, 30, identity, RuleCatalog.HasBadComponent(evidence, identity));
                     finding.RequiresAdmin = true;
                     list.Add(finding);
                 }
@@ -1097,15 +1731,15 @@ namespace RogueCleanerV2
             }
         }
 
-        private Finding NewFinding(string category, string title, string impact, ActionTarget target, string text, int baseScore)
+        private Finding NewFinding(string category, string title, string impact, ActionTarget target, string text, int baseScore, VendorIdentityResult identity, bool badComponent)
         {
-            int score = baseScore + RuleCatalog.VendorBoost(text);
+            int score = baseScore + RuleCatalog.VendorBoost(identity, badComponent);
             Finding finding = new Finding();
             finding.Selected = false;
             bool reportOnly = string.Equals(target.Kind, "ReportOnly", StringComparison.OrdinalIgnoreCase);
             finding.Risk = reportOnly ? "低" : (score >= 80 ? "高" : (score >= 55 ? "中" : "低"));
             finding.Score = reportOnly ? Math.Min(score, 20) : score;
-            finding.Vendor = RuleCatalog.ResolveVendor(text);
+            finding.Vendor = identity == null ? "未知第三方" : identity.Vendor;
             finding.Category = category;
             finding.UserVisibleName = Clean(title);
             finding.UserImpact = impact;
@@ -1114,7 +1748,7 @@ namespace RogueCleanerV2
             finding.Target = target;
             finding.RequiresAdmin = target.Hive == "HKLM" || target.Kind == "DisableService" || target.Kind == "DisableScheduledTask";
             finding.CanRestore = true;
-            finding.Evidence = text;
+            finding.Evidence = Join(text, identity == null ? string.Empty : "身份依据：" + identity.EvidenceSummary);
             finding.Status = "待处理";
             return finding;
         }
@@ -1298,15 +1932,40 @@ namespace RogueCleanerV2
         {
             string[] tokens = new string[]
             {
-                "popup", "pop", "ad", "advert", "news", "hot", "tips", "tip", "notify", "push", "minipage", "mini",
-                "watchdog", "daemon", "guard", "protect", "repair", "restore", "keeper", "serviceplatform",
+                "popup", "adpopup", "adservice", "adpush", "advert", "hotnews", "newsfeed", "notifycenter", "pushservice", "minipage",
+                "watchdog", "daemon", "guardservice", "protectservice", "keeper", "serviceplatform",
                 "弹窗", "广告", "热点", "资讯", "推荐", "迷你页", "守护", "保护", "修复", "恢复", "推送"
             };
             foreach (string token in tokens)
             {
-                if (!string.IsNullOrEmpty(text) && text.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (ContainsBehaviorToken(text, token)) return true;
             }
             return false;
+        }
+
+        private static string SafePathFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            try { return Path.GetFileName(value.Trim().Trim('"')); }
+            catch { return string.Empty; }
+        }
+
+        private static bool ContainsBehaviorToken(string text, string token)
+        {
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(token)) return false;
+            int start = 0;
+            while (true)
+            {
+                int index = text.IndexOf(token, start, StringComparison.OrdinalIgnoreCase);
+                if (index < 0) return false;
+                bool ascii = token.All(delegate(char c) { return c < 128; });
+                if (!ascii || token.Length >= 7) return true;
+                int end = index + token.Length;
+                bool left = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
+                bool right = end >= text.Length || !char.IsLetterOrDigit(text[end]);
+                if (left && right) return true;
+                start = index + 1;
+            }
         }
 
         private static string FriendlyContextMenuTitle(string subKey, string childName, string display, string mui, string explorerHandler, string commandStateHandler, string clsidText)
@@ -1346,7 +2005,7 @@ namespace RogueCleanerV2
             return ShortVendorName(evidence) + "右键菜单";
         }
 
-        private static string FriendlyStartupTitle(string evidence, string name, string command)
+        private static string FriendlyStartupTitle(string evidence, string name, string command, string vendor)
         {
             string lower = Join(evidence, name, command).ToLowerInvariant();
             if (lower.IndexOf("360safetray") >= 0) return "360 安全卫士托盘/防护入口";
@@ -1355,10 +2014,10 @@ namespace RogueCleanerV2
             if (lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷开机启动项";
             if (lower.IndexOf("dingtalk") >= 0 || lower.IndexOf("钉钉") >= 0) return "钉钉开机启动项";
             string human = FirstHumanText(name, Path.GetFileNameWithoutExtension(ExtractExecutableName(command)));
-            return ShortVendorName(evidence) + "开机启动：" + (string.IsNullOrEmpty(human) ? "启动项" : human);
+            return ShortVendorName(vendor, evidence) + "开机启动：" + (string.IsNullOrEmpty(human) ? "启动项" : human);
         }
 
-        private static string FriendlyBrowserTitle(string evidence, string rawName)
+        private static string FriendlyBrowserTitle(string evidence, string rawName, string vendor)
         {
             string lower = Join(evidence, rawName).ToLowerInvariant();
             if (lower.IndexOf("kingsoft") >= 0 || lower.IndexOf("wps") >= 0) return "WPS/金山浏览器扩展宿主";
@@ -1369,7 +2028,7 @@ namespace RogueCleanerV2
             if (lower.IndexOf("dingtalk") >= 0 || lower.IndexOf("钉钉") >= 0) return "钉钉浏览器扩展/外部宿主";
             if (lower.IndexOf("360") >= 0 || lower.IndexOf("qihoo") >= 0) return "360 浏览器扩展/策略";
             if (lower.IndexOf("bandisoft") >= 0 || lower.IndexOf("bandiview") >= 0 || lower.IndexOf("bandizip") >= 0) return "Bandisoft 浏览器/外部宿主";
-            return ShortVendorName(evidence) + "浏览器扩展/宿主";
+            return ShortVendorName(vendor, evidence) + "浏览器扩展/宿主";
         }
 
         private static string FriendlyExplorerNamespaceTitle(string subKey, string childName, string display, string localized, string itemName, string evidence)
@@ -1403,7 +2062,7 @@ namespace RogueCleanerV2
             return "资源管理器";
         }
 
-        private static string FriendlyServiceTitle(string evidence, string name, string display)
+        private static string FriendlyServiceTitle(string evidence, string name, string display, string vendor)
         {
             string lower = Join(evidence, name, display).ToLowerInvariant();
             if (lower.IndexOf("q360amppl") >= 0) return "360 安全防护后台服务";
@@ -1415,10 +2074,10 @@ namespace RogueCleanerV2
             if (lower.IndexOf("xlservice") >= 0 || lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷后台/更新服务";
             if (lower.IndexOf("dingtalk") >= 0 || lower.IndexOf("钉钉") >= 0) return "钉钉后台/更新服务";
             string human = FirstHumanText(display, name);
-            return ShortVendorName(evidence) + "后台服务" + (string.IsNullOrEmpty(human) ? string.Empty : "：" + human);
+            return ShortVendorName(vendor, evidence) + "后台服务" + (string.IsNullOrEmpty(human) ? string.Empty : "：" + human);
         }
 
-        private static string FriendlyTaskTitle(string evidence, string name)
+        private static string FriendlyTaskTitle(string evidence, string name, string vendor)
         {
             string lower = Join(evidence, name).ToLowerInvariant();
             if (lower.IndexOf("wpsupdate") >= 0 || lower.IndexOf("wpswake") >= 0) return "WPS 更新/唤醒计划任务";
@@ -1430,7 +2089,7 @@ namespace RogueCleanerV2
             if (lower.IndexOf("thunder") >= 0 || lower.IndexOf("xunlei") >= 0) return "迅雷更新/拉起计划任务";
             if (lower.IndexOf("dingtalk") >= 0 || lower.IndexOf("钉钉") >= 0) return "钉钉更新/拉起计划任务";
             string human = FirstHumanText(name);
-            return ShortVendorName(evidence) + "计划任务" + (string.IsNullOrEmpty(human) ? string.Empty : "：" + human);
+            return ShortVendorName(vendor, evidence) + "计划任务" + (string.IsNullOrEmpty(human) ? string.Empty : "：" + human);
         }
 
         private static string FirstHumanText(params string[] values)
@@ -1472,6 +2131,12 @@ namespace RogueCleanerV2
         {
             string vendor = RuleCatalog.ResolveVendor(evidence);
             if (vendor == "未知第三方") return "第三方软件";
+            return vendor.Replace(" 系列", string.Empty).Replace(" / ", "/");
+        }
+
+        private static string ShortVendorName(string vendor, string evidence)
+        {
+            if (string.IsNullOrWhiteSpace(vendor) || vendor == "未知第三方") return ShortVendorName(evidence);
             return vendor.Replace(" 系列", string.Empty).Replace(" / ", "/");
         }
 
@@ -2208,7 +2873,8 @@ namespace RogueCleanerV2
             @"Software\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\{C0DE2026-0721-4A20-8A00-BA1D0E7D15C0}",
             @"Software\Google\Chrome\NativeMessagingHosts\com.codex.roguecleaner.BaiduNetdiskImageViewer",
             @"Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexRogueCleanerTest_SogouAdComponent",
-            @"Software\Classes\*\shell\CodexRogueCleanerTest_DingTalkUpload"
+            @"Software\Classes\*\shell\CodexRogueCleanerTest_DingTalkUpload",
+            @"Software\Classes\CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"
         };
 
         public static int Run(DataStore store)
@@ -2335,7 +3001,7 @@ namespace RogueCleanerV2
                 Vendor = "360 系列",
                 Area = "右键菜单",
                 Needle = "CodexRogueCleanerTest_360Safe_RightMenu",
-                Create = delegate { CreateRegistryKey(TestKeys[0], "使用360测试右键菜单", @"cmd.exe /c exit 0"); },
+                Create = delegate { CreateRegistryKey(TestKeys[0], "使用360测试右键菜单", @"C:\CodexRogueCleanerTest\360Safe\360tray.exe"); },
                 Exists = delegate { return RegistryKeyExists(TestKeys[0]); },
                 Cleaned = delegate { return !RegistryKeyExists(TestKeys[0]); },
                 Restored = delegate { return RegistryKeyExists(TestKeys[0]); }
@@ -2346,7 +3012,7 @@ namespace RogueCleanerV2
                 Vendor = "WPS / 金山",
                 Area = "右键菜单",
                 Needle = "CodexRogueCleanerTest_WPSPic_RightMenu",
-                Create = delegate { CreateRegistryKey(TestKeys[1], "WPS图片测试右键菜单", @"cmd.exe /c exit 0"); },
+                Create = delegate { CreateRegistryKey(TestKeys[1], "WPS图片测试右键菜单", @"C:\CodexRogueCleanerTest\Kingsoft\WPS Office\WPSPic.exe"); },
                 Exists = delegate { return RegistryKeyExists(TestKeys[1]); },
                 Cleaned = delegate { return !RegistryKeyExists(TestKeys[1]); },
                 Restored = delegate { return RegistryKeyExists(TestKeys[1]); }
@@ -2368,7 +3034,7 @@ namespace RogueCleanerV2
                 Vendor = "WPS / 金山",
                 Area = "右键菜单",
                 Needle = "CodexRogueCleanerTest_kdesktop_WPSDisk",
-                Create = delegate { CreateRegistryKey(TestKeys[2], "WPS云盘/磁盘入口测试", @"cmd.exe /c exit 0"); },
+                Create = delegate { CreateRegistryKey(TestKeys[2], "WPS云盘/磁盘入口测试", @"C:\CodexRogueCleanerTest\Kingsoft\WPS Office\kdesktop.exe"); },
                 Exists = delegate { return RegistryKeyExists(TestKeys[2]); },
                 Cleaned = delegate { return !RegistryKeyExists(TestKeys[2]); },
                 Restored = delegate { return RegistryKeyExists(TestKeys[2]); }
@@ -2390,10 +3056,10 @@ namespace RogueCleanerV2
                 Vendor = "搜狗",
                 Area = "开机启动",
                 Needle = "CodexRogueCleanerTest_SogouInputPop",
-                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop", BenignWindowsExecutable()); },
-                Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); },
-                Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); },
-                Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop"); }
+                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_SogouInputPop", @"C:\CodexRogueCleanerTest\Sogou\SogouInputPop.exe"); },
+                Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_SogouInputPop"); },
+                Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_SogouInputPop"); },
+                Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_SogouInputPop"); }
             });
             cases.Add(new ValidationCase
             {
@@ -2401,10 +3067,10 @@ namespace RogueCleanerV2
                 Vendor = "迅雷",
                 Area = "开机启动",
                 Needle = "CodexRogueCleanerTest_ThunderStart",
-                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart", BenignWindowsExecutable()); },
-                Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); },
-                Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); },
-                Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart"); }
+                Create = delegate { SetRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_ThunderStart", @"C:\CodexRogueCleanerTest\Xunlei\ThunderStart.exe"); },
+                Exists = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_ThunderStart"); },
+                Cleaned = delegate { return !RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_ThunderStart"); },
+                Restored = delegate { return RegistryValueExists(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_ThunderStart"); }
             });
             cases.Add(new ValidationCase
             {
@@ -2435,7 +3101,7 @@ namespace RogueCleanerV2
                 Vendor = "百度 / 百度网盘",
                 Area = "文件关联/打开方式",
                 Needle = "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open",
-                Create = delegate { SetRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open", string.Empty); },
+                Create = delegate { CreateOpenWithProgId(); },
                 Exists = delegate { return RegistryValueExists(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"); },
                 Cleaned = delegate { return !RegistryValueExists(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"); },
                 Restored = delegate { return RegistryValueExists(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open"); }
@@ -2487,10 +3153,23 @@ namespace RogueCleanerV2
             foreach (string key in TestKeys) DeleteRegistryKey(key);
             DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_SogouInputPop");
             DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\Run", "CodexRogueCleanerTest_ThunderStart");
+            DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_SogouInputPop");
+            DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_ThunderStart");
             DeleteRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open");
             try { File.Delete(UninstallerMarkerPath()); } catch { }
             RunProcess("schtasks.exe", "/Delete /TN \"" + TaskName + "\" /F");
-            if (includeService) RunProcess("sc.exe", "delete \"" + ServiceName + "\"");
+            WaitUntil(delegate { bool enabled; return !TryGetScheduledTaskEnabled(TaskName, out enabled); }, 5000);
+            if (includeService)
+            {
+                RunProcess("sc.exe", "delete \"" + ServiceName + "\"");
+                WaitUntil(delegate { return !ServiceExists(ServiceName); }, 5000);
+            }
+            try
+            {
+                string validationRoot = Path.Combine(Path.GetTempPath(), Marker);
+                if (Directory.Exists(validationRoot)) Directory.Delete(validationRoot, true);
+            }
+            catch { }
         }
 
         private static bool ContainsTestMarker(Finding finding)
@@ -2539,6 +3218,15 @@ namespace RogueCleanerV2
             }
         }
 
+        private static void CreateOpenWithProgId()
+        {
+            SetRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open", string.Empty);
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(TestKeys[7] + @"\shell\open\command"))
+            {
+                key.SetValue("", @"C:\CodexRogueCleanerTest\BaiduNetdisk\BaiduNetdiskImageViewer.exe ""%1""");
+            }
+        }
+
         private static void CreateExplorerNamespaceKey(string keyPath, string title)
         {
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
@@ -2558,6 +3246,7 @@ namespace RogueCleanerV2
                 key.SetValue("Publisher", "搜狗");
                 key.SetValue("SystemComponent", 1, RegistryValueKind.DWord);
                 key.SetValue("InstallLocation", Path.Combine(Path.GetTempPath(), Marker));
+                key.SetValue("DisplayIcon", Path.Combine(Path.GetTempPath(), Marker, "Sogou", "SogouAd.exe"));
                 key.SetValue("UninstallString", "cmd.exe /c echo CodexRogueCleanerTest_Uninstaller_Launched> \"" + UninstallerMarkerPath() + "\"");
             }
         }
@@ -2628,7 +3317,9 @@ namespace RogueCleanerV2
         private static void CreateScheduledTask()
         {
             string time = DateTime.Now.AddMinutes(10).ToString("HH:mm");
-            RunProcess("schtasks.exe", "/Create /SC DAILY /ST " + time + " /TN \"" + TaskName + "\" /TR \"" + BenignWindowsExecutable() + "\" /F");
+            string executable = CreateValidationExecutable("360Safe", "360SafeTask.exe");
+            int exitCode = RunProcess("schtasks.exe", "/Create /SC DAILY /ST " + time + " /TN \"" + TaskName + "\" /TR \"" + executable + "\" /F");
+            if (exitCode != 0) throw new InvalidOperationException("schtasks 创建失败，退出码 " + exitCode);
             WaitUntil(delegate
             {
                 bool enabled;
@@ -2653,9 +3344,20 @@ namespace RogueCleanerV2
             return Path.Combine(windows, "System32\\notepad.exe");
         }
 
+        private static string CreateValidationExecutable(string vendorFolder, string fileName)
+        {
+            string path = Path.Combine(Path.GetTempPath(), Marker, vendorFolder, fileName);
+            string parent = Path.GetDirectoryName(path);
+            if (!Directory.Exists(parent)) Directory.CreateDirectory(parent);
+            File.Copy(BenignWindowsExecutable(), path, true);
+            return path;
+        }
+
         private static void CreateService()
         {
-            RunProcess("sc.exe", "create \"" + ServiceName + "\" binPath= \"cmd.exe /c exit 0\" DisplayName= \"360Safe CodexRogueCleanerTest Service\" start= demand");
+            int exitCode = RunProcess("sc.exe", "create \"" + ServiceName + "\" binPath= \"cmd.exe /c exit 0\" DisplayName= \"360Safe CodexRogueCleanerTest Service\" start= demand");
+            if (exitCode != 0) throw new InvalidOperationException("sc create 创建失败，退出码 " + exitCode);
+            WaitUntil(delegate { return ServiceExists(ServiceName); }, 5000);
         }
 
         private static bool ServiceExists(string serviceName)
@@ -2766,7 +3468,7 @@ namespace RogueCleanerV2
     {
         private readonly DataStore store;
         private readonly BindingList<Finding> rows = new BindingList<Finding>();
-        private readonly DataGridView grid = new DataGridView();
+        private readonly DataGridView grid = new BufferedDataGridView();
         private readonly Label summaryLabel = new Label();
         private readonly Label statusLabel = new Label();
         private readonly Label versionLabel = new Label();
@@ -2780,17 +3482,41 @@ namespace RogueCleanerV2
         private readonly Button lowButton = new Button();
         private readonly Button updateButton = new Button();
         private readonly Button adminButton = new Button();
+        private readonly Button feedbackButton = new Button();
+        private readonly Button overviewNavButton = new Button();
+        private readonly Button startupNavButton = new Button();
+        private readonly Button contextNavButton = new Button();
+        private readonly Button diagnoseNavButton = new Button();
+        private readonly Button recoveryNavButton = new Button();
+        private readonly Label totalCardValue = new Label();
+        private readonly Label suggestionCardValue = new Label();
+        private readonly Label manageableCardValue = new Label();
+        private readonly Label unknownCardValue = new Label();
+        private readonly Label detailTitleLabel = new Label();
+        private readonly Label detailMetaLabel = new Label();
+        private readonly Label detailIdentityLabel = new Label();
+        private readonly Label detailBehaviorLabel = new Label();
+        private readonly Label detailReasonLabel = new Label();
+        private readonly Label detailImpactLabel = new Label();
+        private readonly TextBox detailLocationBox = new TextBox();
+        private int gridDataErrorCount;
+        private readonly Button copyDetailButton = new Button();
+        private readonly SplitContainer contentSplit = new SplitContainer();
         private readonly TextBox searchBox = new TextBox();
-        private readonly object pendingGate = new object();
-        private readonly List<Finding> pending = new List<Finding>();
-        private System.Windows.Forms.Timer flushTimer;
         private string latestEvidenceReportPath;
+        private bool isBusy;
+        private string activeCategoryFilter = "总览";
 
         public MainForm(DataStore store)
+            : this(store, true)
+        {
+        }
+
+        internal MainForm(DataStore store, bool checkUpdates)
         {
             this.store = store;
             BuildUi();
-            UpdateChecker.CheckOnStartup(store, this);
+            if (checkUpdates) UpdateChecker.CheckOnStartup(store, this);
         }
 
         private void BuildUi()
@@ -2798,119 +3524,148 @@ namespace RogueCleanerV2
             Text = AppMeta.ProductName + " " + AppMeta.Version;
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(1120, 700);
-            Size = new Size(1280, 780);
+            Size = new Size(1360, 820);
             AutoScaleMode = AutoScaleMode.Dpi;
-            BackColor = Color.FromArgb(241, 245, 249);
-            Font = new Font("Microsoft YaHei UI", 9F);
+            BackColor = UiTheme.Canvas;
+            Font = UiTheme.Font(9F, FontStyle.Regular);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.RowCount = 4;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            root.Margin = new Padding(0);
+            root.Padding = new Padding(0);
             Controls.Add(root);
 
-            Panel header = new Panel();
+            TableLayoutPanel header = new TableLayoutPanel();
             header.Dock = DockStyle.Fill;
-            header.BackColor = Color.FromArgb(15, 118, 110);
+            header.BackColor = UiTheme.Surface;
+            header.ColumnCount = 2;
+            header.RowCount = 1;
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+            header.Padding = new Padding(22, 8, 18, 7);
             root.Controls.Add(header, 0, 0);
 
-            Label title = new Label();
-            title.Text = "流氓软件克星";
-            title.ForeColor = Color.White;
-            title.BackColor = Color.Transparent;
-            title.Font = new Font("Microsoft YaHei UI", 24F, FontStyle.Bold);
-            title.AutoSize = true;
-            title.Location = new Point(28, 20);
-            header.Controls.Add(title);
-
+            FlowLayoutPanel brand = new FlowLayoutPanel();
+            brand.Dock = DockStyle.Fill;
+            brand.WrapContents = false;
+            brand.FlowDirection = FlowDirection.LeftToRight;
+            brand.Margin = new Padding(0);
+            Label title = new Label { Text = "流氓软件克星", AutoSize = true, ForeColor = UiTheme.Text, Font = UiTheme.Font(17F, FontStyle.Bold), Margin = new Padding(0, 5, 12, 0) };
+            brand.Controls.Add(title);
             versionLabel.Text = "v" + AppMeta.Version;
             versionLabel.ForeColor = Color.White;
-            versionLabel.BackColor = Color.FromArgb(13, 148, 136);
-            versionLabel.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            versionLabel.BackColor = UiTheme.Primary;
+            versionLabel.Font = UiTheme.Font(8.5F, FontStyle.Bold);
             versionLabel.TextAlign = ContentAlignment.MiddleCenter;
             versionLabel.AutoSize = false;
-            versionLabel.Size = new Size(78, 28);
-            versionLabel.Location = new Point(title.Right + 14, 30);
-            header.Controls.Add(versionLabel);
+            versionLabel.Size = new Size(66, 24);
+            versionLabel.Margin = new Padding(0, 7, 0, 0);
+            brand.Controls.Add(versionLabel);
+            header.Controls.Add(brand, 0, 0);
 
-            Label sub = new Label();
-            sub.Text = "单文件版：多线程扫描，清理后复核，运行数据只进“流氓软件克星数据”。";
-            sub.ForeColor = Color.FromArgb(224, 242, 254);
-            sub.AutoSize = true;
-            sub.Location = new Point(32, 68);
-            header.Controls.Add(sub);
+            FlowLayoutPanel headerActions = new FlowLayoutPanel();
+            headerActions.Dock = DockStyle.Fill;
+            headerActions.AutoSize = false;
+            headerActions.WrapContents = false;
+            headerActions.FlowDirection = FlowDirection.RightToLeft;
+            headerActions.Margin = new Padding(0);
+            UiTheme.HeaderButton(adminButton, AdminUtil.IsAdministrator() ? "已是管理员" : "管理员重启");
+            UiTheme.HeaderButton(feedbackButton, "反馈");
+            UiTheme.HeaderButton(updateButton, "检查更新");
+            adminButton.Margin = feedbackButton.Margin = updateButton.Margin = new Padding(4, 4, 0, 0);
+            headerActions.Controls.Add(adminButton);
+            headerActions.Controls.Add(feedbackButton);
+            headerActions.Controls.Add(updateButton);
+            header.Controls.Add(headerActions, 1, 0);
+            adminButton.Enabled = !AdminUtil.IsAdministrator();
+            feedbackButton.Enabled = true;
+            latestEvidenceReportPath = FindLatestEvidenceReport();
 
-            TableLayoutPanel toolArea = new TableLayoutPanel();
-            toolArea.Dock = DockStyle.Fill;
-            toolArea.RowCount = 2;
-            toolArea.ColumnCount = 1;
-            toolArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            toolArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
-            toolArea.Padding = new Padding(18, 10, 18, 8);
-            root.Controls.Add(toolArea, 0, 1);
-
-            FlowLayoutPanel actions = new FlowLayoutPanel();
-            actions.Dock = DockStyle.Fill;
-            actions.Padding = new Padding(0);
-            actions.WrapContents = true;
-            actions.AutoScroll = true;
-            toolArea.Controls.Add(actions, 0, 0);
-
-            ConfigureButton(scanButton, "开始扫描", Color.FromArgb(14, 116, 144));
-            ConfigureButton(cleanButton, "清理勾选", Color.FromArgb(220, 38, 38));
-            ConfigureButton(selectAllButton, "勾选可清理", Color.FromArgb(2, 132, 199));
-            ConfigureButton(lowButton, "只勾低风险", Color.FromArgb(22, 163, 74));
-            ConfigureButton(restoreButton, "恢复中心", Color.FromArgb(79, 70, 229));
-            ConfigureButton(reportButton, "打开证据报告", Color.FromArgb(13, 148, 136));
-            ConfigureButton(updateButton, "检查更新", Color.FromArgb(234, 88, 12));
-            ConfigureButton(adminButton, AdminUtil.IsAdministrator() ? "已是管理员" : "管理员重启", Color.FromArgb(71, 85, 105));
+            TableLayoutPanel command = new TableLayoutPanel();
+            command.Dock = DockStyle.Fill;
+            command.BackColor = UiTheme.Surface;
+            command.RowCount = 2;
+            command.ColumnCount = 1;
+            command.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            command.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
+            command.Padding = new Padding(22, 11, 18, 0);
+            root.Controls.Add(command, 0, 1);
+            FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0), Padding = new Padding(0) };
+            UiTheme.PrimaryButton(scanButton, "▶  开始扫描", UiTheme.Primary);
+            UiTheme.OutlineButton(cleanButton, "▣  清理勾选", UiTheme.Danger);
+            UiTheme.OutlineButton(selectAllButton, "勾选可清理", UiTheme.Primary);
+            UiTheme.OutlineButton(lowButton, "只勾低风险", UiTheme.Success);
+            UiTheme.OutlineButton(restoreButton, "恢复中心", Color.FromArgb(79, 70, 229));
+            UiTheme.OutlineButton(reportButton, "证据报告", UiTheme.Info);
+            scanButton.MinimumSize = new Size(126, 40);
+            cleanButton.MinimumSize = new Size(126, 40);
             actions.Controls.Add(scanButton);
             actions.Controls.Add(cleanButton);
             actions.Controls.Add(selectAllButton);
             actions.Controls.Add(lowButton);
             actions.Controls.Add(restoreButton);
             actions.Controls.Add(reportButton);
-            actions.Controls.Add(updateButton);
-            actions.Controls.Add(adminButton);
-            adminButton.Enabled = !AdminUtil.IsAdministrator();
-            latestEvidenceReportPath = FindLatestEvidenceReport();
-            Label searchLabel = new Label();
-            searchLabel.Text = "搜索";
-            searchLabel.AutoSize = false;
-            searchLabel.Width = TextRenderer.MeasureText(searchLabel.Text, Font).Width + 22;
-            searchLabel.Height = ControlHeight(Font);
-            searchLabel.TextAlign = ContentAlignment.MiddleCenter;
-            searchLabel.Margin = new Padding(6, 0, 4, 8);
-            actions.Controls.Add(searchLabel);
-            searchBox.Width = Math.Max(220, TextRenderer.MeasureText("搜索关键词关键字", Font).Width + 80);
-            searchBox.Height = ControlHeight(Font);
-            searchBox.Margin = new Padding(0, 1, 0, 8);
-            actions.Controls.Add(searchBox);
-
+            command.Controls.Add(actions, 0, 0);
             progress.Dock = DockStyle.Fill;
-            progress.Margin = new Padding(0, 0, 0, 0);
+            progress.Margin = new Padding(0);
             progress.Style = ProgressBarStyle.Continuous;
             progress.Visible = false;
-            toolArea.Controls.Add(progress, 0, 1);
+            command.Controls.Add(progress, 0, 1);
 
-            TableLayoutPanel body = new TableLayoutPanel();
-            body.Dock = DockStyle.Fill;
-            body.RowCount = 2;
-            body.ColumnCount = 1;
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            body.Padding = new Padding(18, 0, 18, 10);
-            root.Controls.Add(body, 0, 2);
+            TableLayoutPanel workspace = new TableLayoutPanel();
+            workspace.Dock = DockStyle.Fill;
+            workspace.ColumnCount = 2;
+            workspace.RowCount = 1;
+            workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
+            workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            workspace.Margin = new Padding(0);
+            root.Controls.Add(workspace, 0, 2);
+            workspace.Controls.Add(BuildNavigation(), 0, 0);
 
+            TableLayoutPanel content = new TableLayoutPanel();
+            content.Dock = DockStyle.Fill;
+            content.ColumnCount = 1;
+            content.RowCount = 3;
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            content.Padding = new Padding(14, 12, 14, 12);
+            content.Margin = new Padding(0);
+            workspace.Controls.Add(content, 1, 0);
+
+            TableLayoutPanel cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };
+            for (int i = 0; i < 4; i++) cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            cards.Controls.Add(CreateSummaryCard("发现项目", totalCardValue, UiTheme.Info, "本次扫描总数"), 0, 0);
+            cards.Controls.Add(CreateSummaryCard("建议处理", suggestionCardValue, UiTheme.Danger, "存在可恢复处理动作"), 1, 0);
+            cards.Controls.Add(CreateSummaryCard("可管理", manageableCardValue, UiTheme.Success, "正常第三方或低风险项"), 2, 0);
+            cards.Controls.Add(CreateSummaryCard("仅提示 / 未知", unknownCardValue, UiTheme.Muted, "不进入批量清理"), 3, 0);
+            content.Controls.Add(cards, 0, 0);
+
+            TableLayoutPanel filterBar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = UiTheme.Canvas, Margin = new Padding(0) };
+            filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
+            filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
             summaryLabel.Dock = DockStyle.Fill;
             summaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+            summaryLabel.ForeColor = UiTheme.Muted;
             summaryLabel.Text = "未扫描。";
-            body.Controls.Add(summaryLabel, 0, 0);
+            filterBar.Controls.Add(summaryLabel, 0, 0);
+            Label searchLabel = new Label { Text = "搜索", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = UiTheme.Muted };
+            filterBar.Controls.Add(searchLabel, 1, 0);
+            searchBox.Dock = DockStyle.Fill;
+            searchBox.Margin = new Padding(8, 8, 0, 8);
+            searchBox.BorderStyle = BorderStyle.FixedSingle;
+            searchBox.Font = UiTheme.Font(9F, FontStyle.Regular);
+            searchBox.Text = string.Empty;
+            filterBar.Controls.Add(searchBox, 2, 0);
+            content.Controls.Add(filterBar, 0, 1);
 
             grid.Dock = DockStyle.Fill;
             grid.AutoGenerateColumns = false;
@@ -2923,59 +3678,73 @@ namespace RogueCleanerV2
             grid.MultiSelect = true;
             grid.EditMode = DataGridViewEditMode.EditProgrammatically;
             grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
-            grid.RowTemplate.Height = GridRowHeight();
+            grid.RowTemplate.Height = Math.Max(36, GridRowHeight());
             grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            grid.ColumnHeadersHeight = GridHeaderHeight();
-            grid.BackgroundColor = Color.White;
+            grid.ColumnHeadersHeight = Math.Max(40, GridHeaderHeight());
+            grid.BackgroundColor = UiTheme.Surface;
+            grid.BorderStyle = BorderStyle.None;
+            grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            grid.GridColor = UiTheme.Border;
             grid.EnableHeadersVisualStyles = false;
-            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(15, 118, 110);
-            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
+            grid.ColumnHeadersDefaultCellStyle.ForeColor = UiTheme.Text;
+            grid.ColumnHeadersDefaultCellStyle.Font = UiTheme.Font(9F, FontStyle.Bold);
+            grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             grid.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 251, 241);
-            grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(15, 23, 42);
+            grid.DefaultCellStyle.BackColor = UiTheme.Surface;
+            grid.DefaultCellStyle.ForeColor = UiTheme.Text;
+            grid.DefaultCellStyle.SelectionBackColor = UiTheme.PrimarySoft;
+            grid.DefaultCellStyle.SelectionForeColor = UiTheme.Text;
+            grid.DefaultCellStyle.Padding = new Padding(5, 0, 5, 0);
             grid.ShowCellToolTips = true;
-            grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = "选", Width = ColumnWidth("选", 46), TrueValue = true, FalseValue = false, ThreeState = false, SortMode = DataGridViewColumnSortMode.NotSortable });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "RiskDisplay", HeaderText = "风险", Width = ColumnWidth("仅提示", 74), ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", Width = ColumnWidth("Bandisoft 看图/压缩工具", 160), ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "在哪里冒出来", Width = ColumnWidth("文件关联/默认打开程序", 190), ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserVisibleName", HeaderText = "用户会看到什么", Width = ColumnWidth("桌面/文件夹空白处右键：会出现“上传到夸克网盘”", 360), ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserImpact", HeaderText = "影响说明", Width = ColumnWidth("桌面/文件夹空白处右键：会出现“上传到夸克网盘”", 520), ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ActionText", HeaderText = "工具会怎么处理", Width = ColumnWidth("备份后删除这条注册表项", 260), ReadOnly = true });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "TechnicalLocation", HeaderText = "技术位置", Width = ColumnWidth("HKCU\\Software\\Classes\\Directory\\Background\\shell", 460), ReadOnly = true });
+            grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Selected", HeaderText = string.Empty, Width = 42, MinimumWidth = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, TrueValue = true, FalseValue = false, ThreeState = false, SortMode = DataGridViewColumnSortMode.NotSortable });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "RiskDisplay", HeaderText = "层级", Width = 76, MinimumWidth = 72, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserVisibleName", HeaderText = "名称", FillWeight = 155, MinimumWidth = 115, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vendor", HeaderText = "厂商", FillWeight = 105, MinimumWidth = 90, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "位置 / 来源", FillWeight = 105, MinimumWidth = 95, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UserImpact", HeaderText = "影响", FillWeight = 190, MinimumWidth = 145, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ActionText", HeaderText = "操作", Width = 116, MinimumWidth = 108, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ReadOnly = true });
             foreach (DataGridViewColumn column in grid.Columns)
             {
-                column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-                column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+                column.DefaultCellStyle.Alignment = column is DataGridViewCheckBoxColumn ? DataGridViewContentAlignment.MiddleCenter : DataGridViewContentAlignment.MiddleLeft;
             }
-            body.Controls.Add(grid, 0, 1);
+
+            contentSplit.Dock = DockStyle.Fill;
+            contentSplit.Orientation = Orientation.Vertical;
+            contentSplit.FixedPanel = FixedPanel.Panel2;
+            contentSplit.SplitterWidth = 8;
+            contentSplit.BackColor = UiTheme.Canvas;
+            CardPanel gridCard = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(1), Margin = new Padding(0) };
+            gridCard.Controls.Add(grid);
+            contentSplit.Panel1.Controls.Add(gridCard);
+            contentSplit.Panel2.Controls.Add(BuildDetailPanel());
+            content.Controls.Add(contentSplit, 0, 2);
 
             TableLayoutPanel footer = new TableLayoutPanel();
             footer.Dock = DockStyle.Fill;
-            footer.BackColor = Color.FromArgb(226, 232, 240);
+            footer.BackColor = Color.FromArgb(238, 242, 247);
             footer.ColumnCount = 2;
             footer.RowCount = 1;
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
             root.Controls.Add(footer, 0, 3);
             statusLabel.Dock = DockStyle.Fill;
             statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            statusLabel.Padding = new Padding(18, 0, 0, 0);
+            statusLabel.Padding = new Padding(14, 0, 0, 0);
+            statusLabel.ForeColor = UiTheme.Muted;
             statusLabel.Text = "就绪。数据目录：" + store.Root;
             footer.Controls.Add(statusLabel, 0, 0);
             authorLink.Dock = DockStyle.Fill;
             authorLink.Text = "作者: " + AppMeta.AuthorName;
             authorLink.TextAlign = ContentAlignment.MiddleRight;
-            authorLink.Padding = new Padding(0, 0, 18, 0);
-            authorLink.LinkColor = Color.FromArgb(37, 99, 235);
+            authorLink.Padding = new Padding(0, 0, 14, 0);
+            authorLink.LinkColor = UiTheme.Info;
             authorLink.ActiveLinkColor = Color.FromArgb(29, 78, 216);
-            authorLink.VisitedLinkColor = Color.FromArgb(37, 99, 235);
+            authorLink.VisitedLinkColor = UiTheme.Info;
             footer.Controls.Add(authorLink, 1, 0);
-
-            flushTimer = new System.Windows.Forms.Timer();
-            flushTimer.Interval = 200;
-            flushTimer.Tick += delegate { FlushPendingRows(); };
 
             scanButton.Click += delegate { StartScan(); };
             cleanButton.Click += delegate { StartClean(); };
@@ -2985,18 +3754,187 @@ namespace RogueCleanerV2
             reportButton.Click += delegate { OpenEvidenceReport(); };
             updateButton.Click += delegate { UpdateChecker.CheckNow(store, this, true); };
             adminButton.Click += delegate { AdminUtil.RelaunchAsAdmin(); };
+            feedbackButton.Click += delegate { ShowFeedbackForCurrentRow(); };
             searchBox.TextChanged += delegate { ApplyFilter(); };
             rows.ListChanged += delegate { UpdateSummary(); };
+            grid.DataError += GridDataError;
             grid.CellToolTipTextNeeded += GridCellToolTipTextNeeded;
             grid.CellFormatting += GridCellFormatting;
             grid.CellClick += GridCellClick;
+            grid.SelectionChanged += delegate { feedbackButton.Enabled = !isBusy; UpdateDetails(); };
             grid.KeyDown += GridKeyDown;
             authorLink.LinkClicked += delegate { OpenAuthorLinks(); };
+            copyDetailButton.Click += delegate { CopyCurrentDetails(); };
+            Shown += delegate
+            {
+                if (contentSplit.Width > 850)
+                {
+                    contentSplit.Panel1MinSize = 500;
+                    contentSplit.Panel2MinSize = 300;
+                    contentSplit.SplitterDistance = Math.Max(500, contentSplit.Width - 350);
+                }
+                UpdateDetails();
+            };
+        }
+
+        private Control BuildNavigation()
+        {
+            CardPanel nav = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(0), Margin = new Padding(0) };
+            TableLayoutPanel items = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(0, 16, 0, 0), Margin = new Padding(0) };
+            items.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            for (int i = 0; i < 5; i++) items.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            items.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            UiTheme.NavButton(overviewNavButton, "⌂   总览");
+            UiTheme.NavButton(startupNavButton, "◉   启动项管理");
+            UiTheme.NavButton(contextNavButton, "☷   右键管理");
+            UiTheme.NavButton(diagnoseNavButton, "▣   弹窗 / 流氓诊断");
+            UiTheme.NavButton(recoveryNavButton, "↶   恢复中心");
+            foreach (Button button in new Button[] { overviewNavButton, startupNavButton, contextNavButton, diagnoseNavButton, recoveryNavButton }) button.Dock = DockStyle.Fill;
+            items.Controls.Add(overviewNavButton, 0, 0);
+            items.Controls.Add(startupNavButton, 0, 1);
+            items.Controls.Add(contextNavButton, 0, 2);
+            items.Controls.Add(diagnoseNavButton, 0, 3);
+            items.Controls.Add(recoveryNavButton, 0, 4);
+            nav.Controls.Add(items);
+            SetNavigation("总览");
+            overviewNavButton.Click += delegate { SetNavigation("总览"); };
+            startupNavButton.Click += delegate { SetNavigation("启动项"); };
+            contextNavButton.Click += delegate { SetNavigation("右键"); };
+            diagnoseNavButton.Click += delegate { SetNavigation("诊断"); };
+            recoveryNavButton.Click += delegate { new RecoveryCenterForm(store).ShowDialog(this); };
+            return nav;
+        }
+
+        private Control CreateSummaryCard(string title, Label valueLabel, Color color, string note)
+        {
+            CardPanel card = new CardPanel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 10, 0), Padding = new Padding(16, 10, 12, 8) };
+            Label titleLabel = new Label { Text = title, Dock = DockStyle.Top, Height = 22, ForeColor = UiTheme.Muted, Font = UiTheme.Font(8.5F, FontStyle.Regular) };
+            valueLabel.Text = "0";
+            valueLabel.Dock = DockStyle.Left;
+            valueLabel.Width = 66;
+            valueLabel.ForeColor = color;
+            valueLabel.Font = UiTheme.Font(20F, FontStyle.Bold);
+            valueLabel.TextAlign = ContentAlignment.MiddleLeft;
+            Label noteLabel = new Label { Text = note, Dock = DockStyle.Fill, ForeColor = UiTheme.Muted, Font = UiTheme.Font(8F, FontStyle.Regular), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+            Panel row = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface };
+            row.Controls.Add(noteLabel);
+            row.Controls.Add(valueLabel);
+            card.Controls.Add(row);
+            card.Controls.Add(titleLabel);
+            return card;
+        }
+
+        private Control BuildDetailPanel()
+        {
+            CardPanel panel = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(0), Margin = new Padding(0) };
+            TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(14) };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            detailTitleLabel.Dock = DockStyle.Top;
+            detailTitleLabel.Height = 30;
+            detailTitleLabel.Font = UiTheme.Font(12F, FontStyle.Bold);
+            detailTitleLabel.ForeColor = UiTheme.Text;
+            detailTitleLabel.AutoEllipsis = true;
+            detailMetaLabel.Dock = DockStyle.Fill;
+            detailMetaLabel.ForeColor = UiTheme.Muted;
+            detailMetaLabel.AutoEllipsis = true;
+            Panel detailHead = new Panel { Dock = DockStyle.Fill };
+            detailHead.Controls.Add(detailMetaLabel);
+            detailHead.Controls.Add(detailTitleLabel);
+            layout.Controls.Add(detailHead, 0, 0);
+
+            Panel sections = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Margin = new Padding(0), Padding = new Padding(0) };
+            TableLayoutPanel sectionStack = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = false, ColumnCount = 1, RowCount = 5, Margin = new Padding(0), Padding = new Padding(0), Height = 590 };
+            sectionStack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            sectionStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
+            sectionStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
+            sectionStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
+            sectionStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
+            sectionStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
+            Control identityCard = CreateDetailCard("身份依据", detailIdentityLabel, 116);
+            Control behaviorCard = CreateDetailCard("行为事实", detailBehaviorLabel, 116);
+            Control reasonCard = CreateDetailCard("建议原因", detailReasonLabel, 100);
+            Control impactCard = CreateDetailCard("处理影响", detailImpactLabel, 100);
+            foreach (Control card in new Control[] { identityCard, behaviorCard, reasonCard, impactCard }) card.Dock = DockStyle.Fill;
+            sectionStack.Controls.Add(identityCard, 0, 0);
+            sectionStack.Controls.Add(behaviorCard, 0, 1);
+            sectionStack.Controls.Add(reasonCard, 0, 2);
+            sectionStack.Controls.Add(impactCard, 0, 3);
+            CardPanel locationCard = new CardPanel { Dock = DockStyle.Fill, Height = 108, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(12, 9, 12, 10) };
+            Label locationTitle = new Label { Text = "技术位置", Dock = DockStyle.Top, Height = 24, ForeColor = UiTheme.Primary, Font = UiTheme.Font(9F, FontStyle.Bold) };
+            detailLocationBox.Dock = DockStyle.Fill;
+            detailLocationBox.Multiline = true;
+            detailLocationBox.ReadOnly = true;
+            detailLocationBox.BorderStyle = BorderStyle.None;
+            detailLocationBox.BackColor = UiTheme.Surface;
+            detailLocationBox.ForeColor = UiTheme.Muted;
+            detailLocationBox.ScrollBars = ScrollBars.Vertical;
+            locationCard.Controls.Add(detailLocationBox);
+            locationCard.Controls.Add(locationTitle);
+            sectionStack.Controls.Add(locationCard, 0, 4);
+            sections.Controls.Add(sectionStack);
+            layout.Controls.Add(sections, 0, 1);
+            UiTheme.OutlineButton(copyDetailButton, "复制详情", UiTheme.Primary);
+            copyDetailButton.Dock = DockStyle.Fill;
+            copyDetailButton.Margin = new Padding(0, 8, 0, 0);
+            layout.Controls.Add(copyDetailButton, 0, 2);
+            panel.Controls.Add(layout);
+            sections.SizeChanged += delegate
+            {
+                int width = Math.Max(240, sections.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 6);
+                sectionStack.Width = width;
+            };
+            return panel;
+        }
+
+        private static Control CreateDetailCard(string title, Label body, int height)
+        {
+            CardPanel card = new CardPanel { Width = 312, Height = height, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(12, 9, 12, 10) };
+            Label titleLabel = new Label { Text = title, Dock = DockStyle.Top, Height = 24, ForeColor = UiTheme.Primary, Font = UiTheme.Font(9F, FontStyle.Bold) };
+            body.Dock = DockStyle.Fill;
+            body.ForeColor = UiTheme.Text;
+            body.Font = UiTheme.Font(8.5F, FontStyle.Regular);
+            body.AutoEllipsis = true;
+            body.TextAlign = ContentAlignment.TopLeft;
+            card.Controls.Add(body);
+            card.Controls.Add(titleLabel);
+            return card;
         }
 
         private void GridCellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex >= 0 && e.ColumnIndex == 0) ToggleRowSelection(e.RowIndex);
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (e.ColumnIndex == 0) ToggleRowSelection(e.RowIndex);
+        }
+
+        private void ShowFeedbackForRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return;
+            Finding finding = grid.Rows[rowIndex].DataBoundItem as Finding;
+            if (finding == null) return;
+            using (FeedbackForm form = new FeedbackForm(store, finding)) form.ShowDialog(this);
+        }
+
+        private void ShowFeedbackForCurrentRow()
+        {
+            if (grid.CurrentRow != null)
+            {
+                ShowFeedbackForRow(grid.CurrentRow.Index);
+                return;
+            }
+            Finding empty = new Finding
+            {
+                Risk = "未判断",
+                Vendor = "未知",
+                Category = "未扫描到的项目",
+                UserVisibleName = "未提供",
+                UserImpact = "请在反馈说明中描述遗漏的启动项、右键项或组件。",
+                Evidence = "没有关联现有扫描结果。",
+                ActionKind = "ReportOnly",
+                Target = new ActionTarget { Kind = "ReportOnly" }
+            };
+            using (FeedbackForm form = new FeedbackForm(store, empty)) form.ShowDialog(this);
         }
 
         private void GridKeyDown(object sender, KeyEventArgs e)
@@ -3041,7 +3979,7 @@ namespace RogueCleanerV2
 
         private void GridCellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (e.RowIndex < 0 || e.RowIndex >= grid.Rows.Count || e.ColumnIndex < 0 || e.ColumnIndex >= grid.Columns.Count) return;
             Finding finding = grid.Rows[e.RowIndex].DataBoundItem as Finding;
             DataGridViewColumn column = grid.Columns[e.ColumnIndex];
             if (finding != null && !finding.CanClean)
@@ -3053,7 +3991,7 @@ namespace RogueCleanerV2
             }
             if (!string.Equals(column.DataPropertyName, "RiskDisplay", StringComparison.OrdinalIgnoreCase))
             {
-                e.CellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                e.CellStyle.Alignment = column is DataGridViewCheckBoxColumn ? DataGridViewContentAlignment.MiddleCenter : DataGridViewContentAlignment.MiddleLeft;
                 return;
             }
             string risk = Convert.ToString(e.Value);
@@ -3078,6 +4016,15 @@ namespace RogueCleanerV2
                 e.CellStyle.ForeColor = Color.FromArgb(21, 128, 61);
             }
             e.CellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        }
+
+        private void GridDataError(object sender, DataGridViewDataErrorEventArgs e)
+        {
+            // BindingList 批量刷新时 CurrencyManager 可能在一个消息循环内仍保留旧行索引。
+            // 该状态会在绑定重置完成后自行恢复，不应弹出 WinForms 默认异常对话框。
+            gridDataErrorCount++;
+            e.ThrowException = false;
+            e.Cancel = true;
         }
 
         private static string WrapTooltipLine(string label, string value)
@@ -3124,26 +4071,6 @@ namespace RogueCleanerV2
             catch { }
         }
 
-        private static void ConfigureButton(Button button, string text, Color color)
-        {
-            button.Text = text;
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderSize = 0;
-            button.BackColor = color;
-            button.ForeColor = Color.White;
-            button.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-            button.AutoSize = true;
-            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            button.Padding = new Padding(13, 0, 13, 0);
-            button.MinimumSize = new Size(Math.Max(112, TextRenderer.MeasureText(text, button.Font).Width + 30), ControlHeight(button.Font));
-            button.Margin = new Padding(0, 0, 10, 8);
-        }
-
-        private static int ControlHeight(Font font)
-        {
-            return Math.Max(34, TextRenderer.MeasureText("国", font).Height + 14);
-        }
-
         private int GridRowHeight()
         {
             return Math.Max(34, TextRenderer.MeasureText("国", grid.Font).Height + 16);
@@ -3154,18 +4081,12 @@ namespace RogueCleanerV2
             return Math.Max(40, TextRenderer.MeasureText("国", grid.ColumnHeadersDefaultCellStyle.Font ?? Font).Height + 18);
         }
 
-        private int ColumnWidth(string sample, int minimum)
-        {
-            return Math.Max(minimum, TextRenderer.MeasureText(sample, grid.Font).Width + 32);
-        }
-
         private void StartScan()
         {
             SetBusy(true, "扫描中：多线程翻注册表、服务、计划任务和浏览器角落。");
             string scanStartedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            rows.Clear();
-            lock (pendingGate) pending.Clear();
-            flushTimer.Start();
+            Stopwatch scanWatch = Stopwatch.StartNew();
+            ReplaceRows(new Finding[0]);
             Task.Factory.StartNew(delegate
             {
                 try
@@ -3174,12 +4095,10 @@ namespace RogueCleanerV2
                     List<Finding> result = engine.ScanAll(this);
                     BeginInvoke((MethodInvoker)delegate
                     {
-                        flushTimer.Stop();
-                        FlushPendingRows();
-                        rows.Clear();
-                        foreach (Finding finding in result) rows.Add(finding);
+                        scanWatch.Stop();
+                        ReplaceRows(result);
                         latestEvidenceReportPath = CleanupEngineWriteScanReport(result);
-                        SetBusy(false, "扫描完成。发现 " + result.Count + " 项。证据报告：" + Path.GetFileName(latestEvidenceReportPath));
+                        SetBusy(false, "扫描完成，用时 " + scanWatch.Elapsed.TotalSeconds.ToString("0.0") + " 秒。发现 " + result.Count + " 项。证据报告：" + Path.GetFileName(latestEvidenceReportPath));
                     });
                 }
                 catch (Exception ex)
@@ -3197,7 +4116,7 @@ namespace RogueCleanerV2
                     }
                     BeginInvoke((MethodInvoker)delegate
                     {
-                        flushTimer.Stop();
+                        scanWatch.Stop();
                         string suffix = string.IsNullOrWhiteSpace(errorReport) ? string.Empty : "\n\n已写入失败报告：\n" + errorReport;
                         SetBusy(false, "扫描失败：" + ex.Message + (string.IsNullOrWhiteSpace(errorReport) ? string.Empty : "。失败报告：" + Path.GetFileName(errorReport)));
                         MessageBox.Show(ex.Message + suffix + "\n\n也可以点击“打开证据报告”查看最近一次报告。", "扫描失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -3263,23 +4182,29 @@ namespace RogueCleanerV2
 
         public void Finding(Finding finding)
         {
-            lock (pendingGate) pending.Add(finding);
+            // 扫描线程只报告阶段；结果完成后一次性绑定，避免扫描期间反复重绘整张表。
         }
 
-        private void FlushPendingRows()
+        private void ReplaceRows(IEnumerable<Finding> findings)
         {
-            List<Finding> chunk;
-            lock (pendingGate)
+            rows.RaiseListChangedEvents = false;
+            try
             {
-                if (pending.Count == 0) return;
-                chunk = pending.Take(100).ToList();
-                pending.RemoveRange(0, chunk.Count);
+                rows.Clear();
+                foreach (Finding finding in findings) rows.Add(finding);
             }
-            foreach (Finding finding in chunk) rows.Add(finding);
+            finally
+            {
+                rows.RaiseListChangedEvents = true;
+                rows.ResetBindings();
+            }
+            UpdateSummary();
+            UpdateDetails();
         }
 
         private void SetBusy(bool busy, string status)
         {
+            isBusy = busy;
             scanButton.Enabled = !busy;
             cleanButton.Enabled = !busy;
             restoreButton.Enabled = !busy;
@@ -3288,12 +4213,14 @@ namespace RogueCleanerV2
             reportButton.Enabled = !busy;
             updateButton.Enabled = !busy;
             adminButton.Enabled = !busy && !AdminUtil.IsAdministrator();
+            feedbackButton.Enabled = !busy;
             searchBox.Enabled = !busy;
             progress.Style = busy ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
             progress.MarqueeAnimationSpeed = busy ? 25 : 0;
             progress.Visible = busy;
             progress.Value = busy ? 0 : 0;
-            Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
+            Cursor = Cursors.Default;
+            UseWaitCursor = false;
             statusLabel.Text = status;
         }
 
@@ -3305,7 +4232,12 @@ namespace RogueCleanerV2
             int low = rows.Count(delegate(Finding f) { return f.CanClean && f.Risk == "低"; });
             int reportOnly = rows.Count(delegate(Finding f) { return !f.CanClean; });
             int cleanable = high + medium + low;
-            summaryLabel.Text = "发现 " + rows.Count + " 项，可清理 " + cleanable + " 项，已勾选 " + selected + " 项。高风险 " + high + "，中风险 " + medium + "，低风险 " + low + "，仅提示 " + reportOnly + "。";
+            int manageable = Math.Max(0, rows.Count - cleanable - reportOnly);
+            totalCardValue.Text = rows.Count.ToString();
+            suggestionCardValue.Text = cleanable.ToString();
+            manageableCardValue.Text = manageable.ToString();
+            unknownCardValue.Text = reportOnly.ToString();
+            summaryLabel.Text = "共 " + rows.Count + " 项  ·  可清理 " + cleanable + "  ·  已勾选 " + selected + "  ·  高 " + high + " / 中 " + medium + " / 低 " + low + "  ·  仅提示 " + reportOnly;
         }
 
         private void SetAll(bool value)
@@ -3327,14 +4259,123 @@ namespace RogueCleanerV2
             string text = searchBox.Text.Trim();
             CurrencyManager manager = (CurrencyManager)BindingContext[rows];
             manager.SuspendBinding();
+            grid.CurrentCell = null;
             foreach (DataGridViewRow row in grid.Rows)
             {
                 Finding finding = row.DataBoundItem as Finding;
                 if (finding == null) continue;
                 string haystack = (finding.RiskDisplay + " " + finding.Vendor + " " + finding.Category + " " + finding.UserVisibleName + " " + finding.UserImpact + " " + finding.ActionText + " " + finding.TechnicalLocation);
-                row.Visible = string.IsNullOrEmpty(text) || haystack.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+                bool textMatches = string.IsNullOrEmpty(text) || haystack.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+                row.Visible = textMatches && CategoryMatches(finding, activeCategoryFilter);
             }
             manager.ResumeBinding();
+            UpdateDetails();
+        }
+
+        private void SetNavigation(string filter)
+        {
+            activeCategoryFilter = filter;
+            UiTheme.SetNavActive(overviewNavButton, filter == "总览");
+            UiTheme.SetNavActive(startupNavButton, filter == "启动项");
+            UiTheme.SetNavActive(contextNavButton, filter == "右键");
+            UiTheme.SetNavActive(diagnoseNavButton, filter == "诊断");
+            UiTheme.SetNavActive(recoveryNavButton, false);
+            if (IsHandleCreated) ApplyFilter();
+        }
+
+        private static bool CategoryMatches(Finding finding, string filter)
+        {
+            if (finding == null || string.IsNullOrEmpty(filter) || filter == "总览") return true;
+            string category = finding.Category ?? string.Empty;
+            if (filter == "启动项") return ContainsAny(category, "启动", "后台服务", "计划任务", "定时拉起");
+            if (filter == "右键") return ContainsAny(category, "右键", "资源管理器", "文件关联", "打开方式", "此电脑");
+            if (filter == "诊断") return ContainsAny(category, "弹窗", "捆绑", "守护", "正在运行", "浏览器插件", "卸载入口");
+            return true;
+        }
+
+        private static bool ContainsAny(string value, params string[] needles)
+        {
+            foreach (string needle in needles)
+            {
+                if (value.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
+            return false;
+        }
+
+        private void UpdateDetails()
+        {
+            Finding finding = null;
+            try
+            {
+                DataGridViewRow currentRow = grid.CurrentRow;
+                if (currentRow != null && currentRow.Index >= 0 && currentRow.Index < grid.Rows.Count)
+                {
+                    finding = currentRow.DataBoundItem as Finding;
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // 增量绑定正在切换 CurrencyManager 位置，下一次 SelectionChanged 会刷新详情。
+            }
+            catch (IndexOutOfRangeException)
+            {
+                // 同上：忽略一个消息循环内的瞬时旧索引。
+            }
+            catch (InvalidOperationException)
+            {
+                // 表格正在重置绑定，暂时显示空详情。
+            }
+            if (finding == null)
+            {
+                detailTitleLabel.Text = "选择一个扫描项目";
+                detailMetaLabel.Text = "这里会显示身份、行为、建议和处理影响。";
+                detailIdentityLabel.Text = "尚未选择项目。";
+                detailBehaviorLabel.Text = "尚未选择项目。";
+                detailReasonLabel.Text = "尚未选择项目。";
+                detailImpactLabel.Text = "尚未选择项目。";
+                detailLocationBox.Text = string.Empty;
+                copyDetailButton.Enabled = false;
+                return;
+            }
+            detailTitleLabel.Text = finding.UserVisibleName;
+            detailMetaLabel.Text = finding.Vendor + "  ·  " + finding.Category + "  ·  " + finding.RiskDisplay;
+            detailIdentityLabel.Text = "厂商：" + finding.Vendor + Environment.NewLine + "证据：" + ShortDetail(finding.Evidence, 230);
+            detailBehaviorLabel.Text = ShortDetail(finding.UserImpact, 260);
+            detailReasonLabel.Text = finding.CanClean ? "当前结果提供可恢复的处理动作；请结合证据确认后再勾选。" : "当前结果仅作提示，不参与一键清理。";
+            detailImpactLabel.Text = finding.ActionText + Environment.NewLine + finding.SelectionHint;
+            detailLocationBox.Text = finding.TechnicalLocation ?? string.Empty;
+            copyDetailButton.Enabled = true;
+        }
+
+        private static string ShortDetail(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "未读取到更多信息。";
+            string text = value.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= maxLength ? text : text.Substring(0, maxLength) + "…";
+        }
+
+        private void CopyCurrentDetails()
+        {
+            Finding finding = grid.CurrentRow == null ? null : grid.CurrentRow.DataBoundItem as Finding;
+            if (finding == null) return;
+            string text = "名称：" + finding.UserVisibleName + Environment.NewLine +
+                "厂商：" + finding.Vendor + Environment.NewLine +
+                "来源：" + finding.Category + Environment.NewLine +
+                "风险：" + finding.RiskDisplay + Environment.NewLine +
+                "影响：" + finding.UserImpact + Environment.NewLine +
+                "处理：" + finding.ActionText + Environment.NewLine +
+                "位置：" + finding.TechnicalLocation + Environment.NewLine +
+                "证据：" + finding.Evidence;
+            try
+            {
+                Clipboard.SetText(text);
+                statusLabel.Text = "已复制当前项目详情。";
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("复制项目详情失败", ex);
+                MessageBox.Show(this, "复制失败：" + ex.Message, "复制详情", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private string CleanupEngineWriteScanReport(List<Finding> findings)

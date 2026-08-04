@@ -1,0 +1,51 @@
+name: 软件识别反馈
+description: 反馈误报、漏报、厂商身份错误或组件关联错误
+title: "[识别反馈] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请使用程序结果行中的“反馈”按钮生成脱敏内容，不要上传完整扫描报告、用户名、用户目录、账号、令牌或网络地址。
+  - type: dropdown
+    id: feedback_type
+    attributes:
+      label: 反馈类型
+      options:
+        - 误报：正常项目被标为风险或建议处理
+        - 漏报：明确存在的项目没有显示
+        - 身份错误：厂商或产品归属错误
+        - 关联错误：不同软件被合并或同一软件未关联
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: 流氓软件克星版本
+      placeholder: 例如 2.0.11
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望的判断
+      description: 请说明它为什么正常、遗漏了什么，或正确的厂商/关联应该是什么。
+    validations:
+      required: true
+  - type: textarea
+    id: sanitized_evidence
+    attributes:
+      label: 程序生成的脱敏证据
+      description: 请粘贴程序已复制的 Markdown 内容，并在提交前再次检查隐私。
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy_confirmation
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已检查以上公开内容，不含用户名、用户目录、账号、令牌、私人文档路径或网络地址。
+          required: true
+        - label: 我理解此 Issue 只作为待验证样本，不会被客户端直接当作识别或清理规则。
+          required: true
