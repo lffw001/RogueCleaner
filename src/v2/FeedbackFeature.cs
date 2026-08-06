@@ -297,6 +297,7 @@ namespace RogueCleanerV2
         {
             this.store = store;
             this.finding = finding;
+            UiTheme.ApplyWindowIdentity(this);
             BuildUi();
             UpdatePreview();
         }

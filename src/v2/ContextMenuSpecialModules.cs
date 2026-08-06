@@ -28,6 +28,37 @@ namespace RogueCleanerV2
         public string SubKey { get; set; }
         public string ValueName { get; set; }
         public string FilePath { get; set; }
+        public string ModuleDisplay { get { return SpecialMenuDisplay.Name(Module); } }
+        [ScriptIgnore] public Image SoftwareIcon { get; set; }
+        [ScriptIgnore] public string SoftwareName { get; set; }
+        [ScriptIgnore] public string IdentityConfidence { get; set; }
+        [ScriptIgnore] public string IconSource { get; set; }
+        [ScriptIgnore] public string IdentityExplanation { get; set; }
+        public SoftwarePresentationEvidence PresentationEvidence() { return new SoftwarePresentationEvidence { DeclaredName = Name, FilePath = FilePath, Command = Detail, TechnicalLocation = Hive + "\\" + SubKey }; }
+        public void ApplyPresentation(SoftwarePresentation p) { if (p == null) return; SoftwareIcon = p.Icon; SoftwareName = p.SoftwareName; IdentityConfidence = p.Confidence; IconSource = p.IconSource; IdentityExplanation = p.Explanation; }
+    }
+
+    internal static class SpecialMenuDisplay
+    {
+        public static string Name(string module)
+        {
+            if (module == "ShellNew 新建菜单") return "新建菜单";
+            if (module == "SendTo 发送到") return "发送到菜单";
+            if (module == "OpenWith 打开方式") return "打开方式";
+            if (module == "OpenWith 应用程序") return "打开方式应用程序";
+            if (module == "GUID 屏蔽") return "组件屏蔽";
+            return module;
+        }
+
+        public static string Key(string display)
+        {
+            if (display == "新建菜单") return "ShellNew 新建菜单";
+            if (display == "发送到菜单") return "SendTo 发送到";
+            if (display == "打开方式") return "OpenWith 打开方式";
+            if (display == "打开方式应用程序") return "OpenWith 应用程序";
+            if (display == "组件屏蔽") return "GUID 屏蔽";
+            return display;
+        }
     }
 
     internal sealed class SpecialMenuInventory
@@ -137,14 +168,14 @@ namespace RogueCleanerV2
                     if (string.IsNullOrWhiteSpace(executable)) continue;
                     string id = "OpenWithList|" + hive + "|" + view + "|" + subKey + "|" + valueName;
                     if (!seen.Add(id)) continue;
-                    entries.Add(Entry(id, "OpenWith 打开方式", extension + " → " + executable, "OpenWithList / " + valueName, hive, view, subKey, valueName, enabled));
+                    entries.Add(Entry(id, "OpenWith 打开方式", extension + " → " + executable, "打开方式列表 / " + valueName, hive, view, subKey, valueName, enabled));
                 }
                 foreach (string application in SafeSubKeys(key))
                 {
                     string childPath = subKey + "\\" + application;
                     string id = "OpenWithListKey|" + hive + "|" + view + "|" + childPath;
                     if (!seen.Add(id)) continue;
-                    entries.Add(Entry(id, "OpenWith 打开方式", extension + " → " + application, "OpenWithList 子项", hive, view, childPath, string.Empty, enabled));
+                    entries.Add(Entry(id, "OpenWith 打开方式", extension + " → " + application, "打开方式列表子项", hive, view, childPath, string.Empty, enabled));
                 }
             }
         }
@@ -506,17 +537,17 @@ namespace RogueCleanerV2
 
         public SpecialContextMenuForm(DataStore store)
         {
-            this.store = store; Text = "右键专用模块"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(980, 620); Size = new Size(1160, 700); BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); BuildUi(); Shown += delegate { RefreshRows(); };
+            this.store = store; Text = "右键专用模块"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(980, 620); Size = new Size(1160, 700); BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this); BuildUi(); Shown += delegate { RefreshRows(); };
         }
 
         private void BuildUi()
         {
-            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(16) }; root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); Controls.Add(root);
-            root.Controls.Add(new Label { Text = "ShellNew / SendTo / OpenWith / GUID 屏蔽", Dock = DockStyle.Fill, Font = UiTheme.Font(15F, FontStyle.Bold), ForeColor = UiTheme.Text }, 0, 0);
-            FlowLayoutPanel bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 220; module.Items.AddRange(new object[] { "全部模块", "ShellNew 新建菜单", "SendTo 发送到", "OpenWith 打开方式", "OpenWith 应用程序", "GUID 屏蔽" }); module.SelectedIndex = 0;
-            UiTheme.OutlineButton(refreshButton, "刷新", UiTheme.Primary); UiTheme.OutlineButton(enableButton, "启用", UiTheme.Success); UiTheme.OutlineButton(disableButton, "禁用", UiTheme.Danger); Button add = ButtonOf("添加", UiTheme.Success); UiTheme.OutlineButton(deleteButton, "删除", UiTheme.Danger); bar.Controls.Add(module); bar.Controls.Add(refreshButton); bar.Controls.Add(enableButton); bar.Controls.Add(disableButton); bar.Controls.Add(add); bar.Controls.Add(deleteButton); root.Controls.Add(bar, 0, 1);
-            grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; grid.BackgroundColor = UiTheme.Surface; grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 150 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Module", HeaderText = "模块", FillWeight = 100 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 180 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); root.Controls.Add(grid, 0, 2);
-            status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; root.Controls.Add(status, 0, 3);
+            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(16) }; root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); Controls.Add(root);
+            root.Controls.Add(UiTheme.ModuleHeader("更多右键位置", "管理“新建”“发送到”“打开方式”以及组件屏蔽等扩展入口"), 0, 0);
+            FlowLayoutPanel filter = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = UiTheme.Surface, Padding = new Padding(8, 6, 8, 6) }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 220; module.Items.AddRange(new object[] { "全部模块", "新建菜单", "发送到菜单", "打开方式", "打开方式应用程序", "组件屏蔽" }); module.SelectedIndex = 0; filter.Controls.Add(new Label { Text = "显示模块", AutoSize = true, ForeColor = UiTheme.Muted, Margin = new Padding(0, 5, 10, 0) }); filter.Controls.Add(module); root.Controls.Add(filter, 0, 1);
+            FlowLayoutPanel bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Padding = new Padding(0, 7, 0, 7) }; Button add = new Button(); UiTheme.ToolButton(refreshButton, "刷新列表", SystemIcons.Information); UiTheme.ToolButton(enableButton, "显示选中", SystemIcons.Shield); UiTheme.ToolButton(disableButton, "隐藏选中", SystemIcons.Warning); UiTheme.ToolButton(add, "添加项目", SystemIcons.Information); UiTheme.ToolButton(deleteButton, "删除项目", SystemIcons.Error); bar.Controls.Add(refreshButton); bar.Controls.Add(enableButton); bar.Controls.Add(disableButton); bar.Controls.Add(add); bar.Controls.Add(deleteButton); root.Controls.Add(bar, 0, 2);
+            grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; grid.BackgroundColor = UiTheme.Surface; grid.RowTemplate.Height = 34; grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "SoftwareIcon", HeaderText = "", Width = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ImageLayout = DataGridViewImageCellLayout.Normal }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 150 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SoftwareName", HeaderText = "关联软件", FillWeight = 110 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ModuleDisplay", HeaderText = "模块", FillWeight = 100 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 180 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); Panel gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface }; UiTheme.AttachModernScrollBar(gridHost, grid); root.Controls.Add(gridHost, 0, 3);
+            status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; root.Controls.Add(status, 0, 4);
             refreshButton.Click += delegate { RefreshRows(); }; module.SelectedIndexChanged += delegate { ApplyFilter(); }; enableButton.Click += delegate { Toggle(true); }; disableButton.Click += delegate { Toggle(false); }; deleteButton.Click += delegate { DeleteCurrent(); }; add.Click += delegate { AddCurrentModule(); }; grid.SelectionChanged += delegate { UpdateActions(); };
         }
 
@@ -533,15 +564,16 @@ namespace RogueCleanerV2
                 {
                     refreshButton.Enabled = true;
                     if (task.IsFaulted) { Exception ex = task.Exception == null ? new InvalidOperationException("未知枚举错误。") : task.Exception.GetBaseException(); Logger.Error("专用模块枚举失败", ex); MessageBox.Show(this, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
-                    inventory = task.Result; ApplyFilter(); status.Text = "共发现 " + inventory.Entries.Count + " 项；" + inventory.Warnings.Count + " 个位置未读取。";
+                    inventory = task.Result; foreach (SpecialMenuEntry entry in inventory.Entries) { entry.SoftwareIcon = SoftwarePresentationResolver.PlaceholderIcon; entry.SoftwareName = "正在识别…"; } ApplyFilter(); SoftwarePresentationQueue.Hydrate(this, inventory.Entries, delegate { grid.Invalidate(); }); status.Text = "共发现 " + inventory.Entries.Count + " 项；" + inventory.Warnings.Count + " 个位置未读取。";
                 });
             });
         }
-        private void ApplyFilter() { if (inventory == null) return; string selected = Convert.ToString(module.SelectedItem); rows.RaiseListChangedEvents = false; rows.Clear(); foreach (SpecialMenuEntry entry in inventory.Entries) if (selected == "全部模块" || entry.Module == selected) rows.Add(entry); rows.RaiseListChangedEvents = true; rows.ResetBindings(); UpdateActions(); }
+        private void ApplyFilter() { if (inventory == null) return; string selected = SpecialMenuDisplay.Key(Convert.ToString(module.SelectedItem)); rows.RaiseListChangedEvents = false; rows.Clear(); foreach (SpecialMenuEntry entry in inventory.Entries) if (selected == "全部模块" || entry.Module == selected) rows.Add(entry); rows.RaiseListChangedEvents = true; rows.ResetBindings(); UpdateActions(); }
         private void UpdateActions() { SpecialMenuEntry entry = Current(); enableButton.Enabled = entry != null && !entry.ReadOnly && !entry.Enabled; disableButton.Enabled = entry != null && !entry.ReadOnly && entry.Enabled; deleteButton.Enabled = entry != null && !entry.ReadOnly && entry.Module != "OpenWith 应用程序"; }
-        private void Toggle(bool enabled) { SpecialMenuEntry entry = Current(); if (entry == null) return; try { new SpecialContextMenuMutationService(store).SetEnabled(entry, enabled); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
-        private void DeleteCurrent() { SpecialMenuEntry entry = Current(); if (entry == null) return; if (MessageBox.Show(this, "删除“" + entry.Name + "”？操作前会备份。", "删除专用菜单项", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return; try { new SpecialContextMenuMutationService(store).Delete(entry); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
-        private void AddCurrentModule() { string selected = Convert.ToString(module.SelectedItem); if (selected == "全部模块" || selected == "OpenWith 应用程序") { MessageBox.Show(this, "请先选择 ShellNew、SendTo、OpenWith 打开方式或 GUID 屏蔽模块。", Text, MessageBoxButtons.OK, MessageBoxIcon.Information); return; } using (SpecialMenuAddForm form = new SpecialMenuAddForm(selected)) { if (form.ShowDialog(this) != DialogResult.OK) return; try { SpecialContextMenuMutationService service = new SpecialContextMenuMutationService(store); if (selected == "ShellNew 新建菜单") service.AddShellNew(form.FirstValue, form.SecondValue); else if (selected == "SendTo 发送到") service.AddSendTo(form.FirstValue, form.SecondValue); else if (selected == "OpenWith 打开方式") service.AddOpenWith(form.FirstValue, form.SecondValue); else service.AddBlockedGuid(form.FirstValue, form.SecondValue); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "添加失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } } }
+        private void Toggle(bool enabled) { SpecialMenuEntry entry = Current(); if (entry == null || (entry.RequiresAdmin && !EnsureAdministrator())) return; try { new SpecialContextMenuMutationService(store).SetEnabled(entry, enabled); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
+        private void DeleteCurrent() { SpecialMenuEntry entry = Current(); if (entry == null || (entry.RequiresAdmin && !EnsureAdministrator())) return; if (MessageBox.Show(this, "删除“" + entry.Name + "”？操作前会备份。", "删除专用菜单项", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return; try { new SpecialContextMenuMutationService(store).Delete(entry); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
+        private void AddCurrentModule() { string selected = SpecialMenuDisplay.Key(Convert.ToString(module.SelectedItem)); if (selected == "全部模块" || selected == "OpenWith 应用程序") { MessageBox.Show(this, "请先选择新建菜单、发送到菜单、打开方式或组件屏蔽。", Text, MessageBoxButtons.OK, MessageBoxIcon.Information); return; } using (SpecialMenuAddForm form = new SpecialMenuAddForm(selected)) { if (form.ShowDialog(this) != DialogResult.OK) return; try { SpecialContextMenuMutationService service = new SpecialContextMenuMutationService(store); if (selected == "ShellNew 新建菜单") service.AddShellNew(form.FirstValue, form.SecondValue); else if (selected == "SendTo 发送到") service.AddSendTo(form.FirstValue, form.SecondValue); else if (selected == "OpenWith 打开方式") service.AddOpenWith(form.FirstValue, form.SecondValue); else service.AddBlockedGuid(form.FirstValue, form.SecondValue); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "添加失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } } }
+        private bool EnsureAdministrator() { if (AdminUtil.IsAdministrator()) return true; if (MessageBox.Show(this, "该项目属于所有用户范围，需要管理员权限。是否请求 Windows 管理员权限？\n\n重启后会重新打开右键管理，不会自动修改项目。", "需要管理员权限", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) AdminUtil.RelaunchAsAdmin(this, store, new ElevationResumeState { Page = "右键", OpenContextMenu = true }); return false; }
     }
 
     internal sealed class SpecialMenuAddForm : Form
@@ -550,9 +582,9 @@ namespace RogueCleanerV2
         public string FirstValue { get { return first.Text.Trim(); } } public string SecondValue { get { return second.Text.Trim(); } }
         public SpecialMenuAddForm(string module)
         {
-            Text = "添加 " + module; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(620, 230); BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular);
-            string firstLabel = module.StartsWith("ShellNew") || module.StartsWith("OpenWith") ? "文件扩展名" : module.StartsWith("SendTo") ? "显示名称" : "GUID / CLSID";
-            string secondLabel = module.StartsWith("ShellNew") ? "模板文件（可空）" : module.StartsWith("OpenWith") ? "ProgID" : module.StartsWith("SendTo") ? "目标路径" : "说明（可空）";
+            Text = "添加 " + SpecialMenuDisplay.Name(module); StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(620, 230); BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this);
+            string firstLabel = module.StartsWith("ShellNew") || module.StartsWith("OpenWith") ? "文件扩展名" : module.StartsWith("SendTo") ? "显示名称" : "组件编号";
+            string secondLabel = module.StartsWith("ShellNew") ? "模板文件（可空）" : module.StartsWith("OpenWith") ? "程序关联标识" : module.StartsWith("SendTo") ? "目标路径" : "说明（可空）";
             TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, Padding = new Padding(22) }; root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); Controls.Add(root);
             root.Controls.Add(new Label { Text = firstLabel, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0); first.Dock = DockStyle.Fill; first.Margin = new Padding(0, 10, 0, 10); root.Controls.Add(first, 1, 0); root.Controls.Add(new Label { Text = secondLabel, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1); second.Dock = DockStyle.Fill; second.Margin = new Padding(0, 10, 0, 10); root.Controls.Add(second, 1, 1);
             FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft }; Button cancel = new Button(); UiTheme.OutlineButton(cancel, "取消", UiTheme.Muted); cancel.DialogResult = DialogResult.Cancel; Button ok = new Button(); UiTheme.PrimaryButton(ok, "添加", UiTheme.Primary); ok.Click += delegate { if (string.IsNullOrWhiteSpace(first.Text) || (!module.StartsWith("ShellNew") && !module.StartsWith("GUID") && string.IsNullOrWhiteSpace(second.Text))) { MessageBox.Show(this, "请填写必填项。", Text, MessageBoxButtons.OK, MessageBoxIcon.Information); return; } DialogResult = DialogResult.OK; }; actions.Controls.Add(cancel); actions.Controls.Add(ok); root.Controls.Add(actions, 1, 2); AcceptButton = ok; CancelButton = cancel;

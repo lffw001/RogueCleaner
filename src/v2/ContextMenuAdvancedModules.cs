@@ -32,8 +32,38 @@ namespace RogueCleanerV2
         public string FilePath { get; set; }
         public string Group { get; set; }
         public string PackageName { get; set; }
+        public string PublisherName { get; set; }
         public string ItemType { get; set; }
+        public string CommandTitle { get; set; }
+        public string CommandIcon { get; set; }
+        public string TitleProbeStatus { get; set; }
         public int Contexts { get; set; }
+        public string ModuleDisplay { get { return AdvancedMenuDisplay.Name(Module); } }
+        [ScriptIgnore] public Image SoftwareIcon { get; set; }
+        [ScriptIgnore] public string SoftwareName { get; set; }
+        [ScriptIgnore] public string IdentityConfidence { get; set; }
+        [ScriptIgnore] public string IconSource { get; set; }
+        [ScriptIgnore] public string IdentityExplanation { get; set; }
+        public SoftwarePresentationEvidence PresentationEvidence() { return new SoftwarePresentationEvidence { DeclaredName = Name, FilePath = FilePath, Command = Detail, TechnicalLocation = Hive + "\\" + SubKey }; }
+        public void ApplyPresentation(SoftwarePresentation p) { if (p == null) return; SoftwareIcon = p.Icon; SoftwareName = p.SoftwareName; IdentityConfidence = p.Confidence; IconSource = p.IconSource; IdentityExplanation = p.Explanation; }
+    }
+
+    internal static class AdvancedMenuDisplay
+    {
+        public static string Name(string module)
+        {
+            if (module == "WinX 快捷菜单") return "系统快捷菜单";
+            if (module == "现代 / UWP 菜单") return "Windows 现代菜单";
+            if (module == "IE 旧式菜单") return "IE 旧式菜单";
+            return module;
+        }
+
+        public static string Key(string display)
+        {
+            if (display == "系统快捷菜单") return "WinX 快捷菜单";
+            if (display == "Windows 现代菜单") return "现代 / UWP 菜单";
+            return display;
+        }
     }
 
     internal sealed class AdvancedMenuInventory
@@ -95,13 +125,21 @@ namespace RogueCleanerV2
             List<ScanWarning> warnings = new List<ScanWarning>();
             EnumerateWinX(entries, warnings);
             EnumerateIe(entries, warnings);
-            EnumeratePackagedMenus(entries, warnings);
+            EnumeratePackagedMenus(entries, warnings, true);
             EnumerateRecipes(entries);
             return new AdvancedMenuInventory
             {
                 Entries = entries.OrderBy(delegate(AdvancedMenuEntry e) { return e.Module; }).ThenBy(delegate(AdvancedMenuEntry e) { return e.Group; }).ThenBy(delegate(AdvancedMenuEntry e) { return e.Name; }).ToList(),
                 Warnings = warnings
             };
+        }
+
+        internal AdvancedMenuInventory EnumeratePackagedOnly(bool probeTitles)
+        {
+            List<AdvancedMenuEntry> entries = new List<AdvancedMenuEntry>();
+            List<ScanWarning> warnings = new List<ScanWarning>();
+            EnumeratePackagedMenus(entries, warnings, probeTitles);
+            return new AdvancedMenuInventory { Entries = entries, Warnings = warnings };
         }
 
         private void EnumerateWinX(List<AdvancedMenuEntry> entries, List<ScanWarning> warnings)
@@ -124,8 +162,8 @@ namespace RogueCleanerV2
                         entries.Add(new AdvancedMenuEntry
                         {
                             Id = "WinX|" + (enabled ? "1" : "0") + "|" + file,
-                            Module = "WinX 快捷菜单", Name = Path.GetFileNameWithoutExtension(file), Detail = target,
-                            Scope = "当前用户 / " + group, Status = enabled ? "已启用" : "已禁用", Enabled = enabled,
+                            Module = "WinX 快捷菜单", Name = ChineseDisplayText.SystemShortcutName(Path.GetFileNameWithoutExtension(file)), Detail = target,
+                            Scope = "当前用户 / " + ChineseDisplayText.GroupName(group), Status = enabled ? "已启用" : "已禁用", Enabled = enabled,
                             FilePath = file, Group = group
                         });
                     }
@@ -172,7 +210,7 @@ namespace RogueCleanerV2
             catch (Exception ex) { if (IsDenied(ex)) AddWarning(warnings, "IE 旧式菜单", RegistryHelper.NativePath(rootTarget), ex); else throw; }
         }
 
-        private void EnumeratePackagedMenus(List<AdvancedMenuEntry> entries, List<ScanWarning> warnings)
+        private void EnumeratePackagedMenus(List<AdvancedMenuEntry> entries, List<ScanWarning> warnings, bool probeTitles)
         {
             HashSet<string> packages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
@@ -199,30 +237,118 @@ namespace RogueCleanerV2
                     XmlDocument xml = new XmlDocument(); xml.XmlResolver = null; xml.Load(manifest);
                     XmlNode identity = xml.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']");
                     string packageName = identity == null || identity.Attributes["Name"] == null ? package : identity.Attributes["Name"].Value;
+                    string packageDisplayName = PackageDisplayName(xml, packageName);
+                    string publisherName = PackagePublisherName(xml);
                     XmlNodeList verbs = xml.SelectNodes("//*[local-name()='Extension' and @Category='windows.fileExplorerContextMenus']//*[local-name()='ItemType']/*[local-name()='Verb']");
                     foreach (XmlNode verb in verbs)
                     {
-                        string clsid = Attribute(verb, "Clsid"); Guid parsed;
-                        if (!Guid.TryParse(clsid, out parsed)) continue;
-                        string normalized = "{" + parsed.ToString().ToUpperInvariant() + "}";
                         string itemType = verb.ParentNode == null ? string.Empty : Attribute(verb.ParentNode, "Type");
-                        string id = package + "|" + normalized + "|" + itemType;
-                        if (!seen.Add(id)) continue;
-                        bool blocked = RegistryValueExists("HKCU", DefaultView(), BlockedRoot, normalized);
-                        entries.Add(new AdvancedMenuEntry
-                        {
-                            Id = "UWP|" + id, Module = "现代 / UWP 菜单", Name = packageName + " · " + Attribute(verb, "Id"),
-                            Detail = normalized + (string.IsNullOrWhiteSpace(itemType) ? string.Empty : " / " + itemType),
-                            Scope = "当前用户 / Windows 11", Status = blocked ? "已禁用" : "已启用", Enabled = !blocked,
-                            Hive = "HKCU", View = DefaultView(), SubKey = BlockedRoot, ValueName = normalized,
-                            PackageName = package, ItemType = itemType
-                        });
+                        AddPackagedMenu(entries, seen, xml, manifest, package, packageName, packageDisplayName, publisherName, Attribute(verb, "Clsid"), itemType, "现代", probeTitles);
+                    }
+
+                    XmlNodeList classicHandlers = xml.SelectNodes("//*[local-name()='Extension' and @Category='windows.fileExplorerClassicContextMenuHandler']//*[local-name()='ExtensionHandler']");
+                    foreach (XmlNode handler in classicHandlers)
+                    {
+                        AddPackagedMenu(entries, seen, xml, manifest, package, packageName, packageDisplayName, publisherName, Attribute(handler, "Clsid"), Attribute(handler, "Type"), "传统兼容", probeTitles);
                     }
                 }
                 catch (UnauthorizedAccessException ex) { AddWarning(warnings, "现代菜单", manifest, ex); }
                 catch (System.Security.SecurityException ex) { AddWarning(warnings, "现代菜单", manifest, ex); }
                 catch (XmlException ex) { AddWarning(warnings, "现代菜单", manifest, ex); }
             }
+        }
+
+        private void AddPackagedMenu(List<AdvancedMenuEntry> entries, HashSet<string> seen, XmlDocument xml, string manifest, string package, string packageName, string packageDisplayName, string publisherName, string clsid, string itemType, string declarationKind, bool probeTitles)
+        {
+            Guid parsed;
+            if (!Guid.TryParse(clsid, out parsed)) return;
+            string normalizedClsid = "{" + parsed.ToString().ToUpperInvariant() + "}";
+            string normalizedItemType = NormalizePackagedItemType(itemType);
+            string id = package + "|" + normalizedClsid + "|" + normalizedItemType;
+            if (!seen.Add(id)) return;
+
+            bool blocked = RegistryValueExists("HKCU", DefaultView(), BlockedRoot, normalizedClsid);
+            string componentPath = PackagedComponentPath(xml, manifest, normalizedClsid);
+            string productName = FileProductName(componentPath);
+            string softwareName = string.IsNullOrWhiteSpace(productName) ? packageDisplayName : productName;
+            bool microsoft = IsMicrosoftPackage(packageName, publisherName);
+            ContextCommandProbeResult probe = microsoft || !probeTitles
+                ? new ContextCommandProbeResult { Error = "系统组件不做动态文字探测。" }
+                : ContextCommandTitleProbe.ProbeIsolated(normalizedClsid, normalizedItemType, componentPath);
+            string title = probe == null ? string.Empty : probe.Title;
+            string display = string.IsNullOrWhiteSpace(title)
+                ? softwareName + " 动态右键命令（文字未读取）"
+                : title;
+
+            entries.Add(new AdvancedMenuEntry
+            {
+                Id = "UWP|" + id,
+                Module = "现代 / UWP 菜单",
+                Name = display,
+                CommandTitle = title,
+                CommandIcon = probe == null ? string.Empty : probe.Icon,
+                TitleProbeStatus = probe == null ? "没有返回探测结果。" : (string.IsNullOrWhiteSpace(probe.Error) ? "命令文字来源：" + probe.Source + "。" : probe.Error),
+                Detail = normalizedClsid + (string.IsNullOrWhiteSpace(normalizedItemType) ? string.Empty : " / " + normalizedItemType) + " / " + declarationKind,
+                Scope = "当前用户 / Windows 11",
+                Status = blocked ? "已禁用" : "已启用",
+                Enabled = !blocked,
+                Hive = "HKCU",
+                View = DefaultView(),
+                SubKey = BlockedRoot,
+                ValueName = normalizedClsid,
+                PackageName = package,
+                PublisherName = publisherName,
+                ItemType = normalizedItemType,
+                FilePath = componentPath
+            });
+        }
+
+        internal static string NormalizePackagedItemType(string itemType)
+        {
+            string value = (itemType ?? string.Empty).Trim();
+            return string.Equals(value, "Folder", StringComparison.OrdinalIgnoreCase) ? "Directory" : value;
+        }
+
+        private static bool IsMicrosoftPackage(string packageName, string publisherName)
+        {
+            return (packageName ?? string.Empty).StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)
+                || (publisherName ?? string.Empty).IndexOf("Microsoft", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string PackageDisplayName(XmlDocument xml, string fallback)
+        {
+            XmlNode node = xml.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Properties']/*[local-name()='DisplayName']");
+            string value = node == null ? fallback : node.InnerText;
+            if (string.IsNullOrWhiteSpace(value)) return fallback;
+            value = System.Text.RegularExpressions.Regex.Replace(value, "(?i)\\s+(shell extension|context menu handler|context menu)$", string.Empty).Trim();
+            return string.IsNullOrWhiteSpace(value) ? fallback : value;
+        }
+
+        private static string PackagePublisherName(XmlDocument xml)
+        {
+            XmlNode node = xml.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Properties']/*[local-name()='PublisherDisplayName']");
+            return node == null ? string.Empty : node.InnerText.Trim();
+        }
+
+        private static string PackagedComponentPath(XmlDocument xml, string manifest, string normalizedClsid)
+        {
+            string wanted = normalizedClsid.Trim('{', '}');
+            foreach (XmlNode node in xml.SelectNodes("//*[local-name()='Class']"))
+            {
+                string id = Attribute(node, "Id").Trim('{', '}');
+                if (!string.Equals(id, wanted, StringComparison.OrdinalIgnoreCase)) continue;
+                string relative = Attribute(node, "Path");
+                if (string.IsNullOrWhiteSpace(relative)) continue;
+                string path = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(manifest), relative));
+                if (File.Exists(path)) return path;
+            }
+            return string.Empty;
+        }
+
+        private static string FileProductName(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return string.Empty;
+            try { return FileVersionInfo.GetVersionInfo(path).ProductName; } catch { return string.Empty; }
         }
 
         private void EnumerateRecipes(List<AdvancedMenuEntry> entries)
@@ -377,7 +503,7 @@ namespace RogueCleanerV2
                 using (RegistryKey root = RegistryHelper.OpenBase(target.Hive, target.View, true))
                 using (RegistryKey key = root.CreateSubKey(target.SubKey, RegistryKeyPermissionCheck.ReadWriteSubTree))
                     if (enabled) key.DeleteValue(target.ValueName, false); else key.SetValue(target.ValueName, entry.PackageName ?? "由流氓软件克星禁用", RegistryValueKind.String);
-                return Complete(id, batchPath, backupPath, entry, enabled ? "EnableUWP" : "DisableUWP", "仅修改当前用户的 Shell 扩展屏蔽状态；应用包注册保持不变。");
+                return Complete(id, batchPath, backupPath, entry, enabled ? "EnableUWP" : "DisableUWP", "仅修改当前用户的右键扩展屏蔽状态；应用包注册保持不变。");
             }
             catch { RestoreBackup(backup); throw; }
         }
@@ -520,18 +646,18 @@ namespace RogueCleanerV2
 
         public AdvancedContextMenuForm(DataStore store)
         {
-            this.store = store; Text = "高级右键兼容"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(1020, 640); Size = new Size(1220, 720); BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); BuildUi(); Shown += delegate { RefreshRows(); };
+            this.store = store; Text = "高级右键兼容"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(1020, 640); Size = new Size(1220, 720); BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this); BuildUi(); Shown += delegate { RefreshRows(); };
         }
 
         private void BuildUi()
         {
-            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Padding = new Padding(18) }; root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); Controls.Add(root);
-            root.Controls.Add(new Label { Text = "WinX · Windows 11 现代菜单 · IE 旧式菜单 · 安全增强配方", Dock = DockStyle.Fill, Font = UiTheme.Font(14F, FontStyle.Bold), ForeColor = UiTheme.Text }, 0, 0);
-            FlowLayoutPanel bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 205; module.Items.AddRange(new object[] { "全部模块", "WinX 快捷菜单", "现代 / UWP 菜单", "IE 旧式菜单", "安全增强菜单" }); module.SelectedIndex = 0;
-            ButtonStyle(refresh, "刷新", UiTheme.Primary); ButtonStyle(enable, "启用 / 安装", UiTheme.Success); ButtonStyle(disable, "禁用 / 移除", UiTheme.Danger); ButtonStyle(edit, "编辑", UiTheme.Primary); ButtonStyle(add, "添加 IE 项", UiTheme.Success); ButtonStyle(delete, "删除", UiTheme.Danger); ButtonStyle(up, "上移", UiTheme.Muted); ButtonStyle(down, "下移", UiTheme.Muted);
-            foreach (Control c in new Control[] { module, refresh, enable, disable, edit, add, delete, up, down }) bar.Controls.Add(c); root.Controls.Add(bar, 0, 1);
+            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, ColumnCount = 1, Padding = new Padding(18) }; root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); Controls.Add(root);
+            root.Controls.Add(UiTheme.ModuleHeader("系统右键高级功能", "管理系统快捷菜单、Windows 11 现代菜单、IE 旧式菜单和安全增强入口"), 0, 0);
+            FlowLayoutPanel filter = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = UiTheme.Surface, Padding = new Padding(8, 6, 8, 6) }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 205; module.Items.AddRange(new object[] { "全部模块", "系统快捷菜单", "Windows 现代菜单", "IE 旧式菜单", "安全增强菜单" }); module.SelectedIndex = 0; filter.Controls.Add(new Label { Text = "显示模块", AutoSize = true, ForeColor = UiTheme.Muted, Margin = new Padding(0, 5, 10, 0) }); filter.Controls.Add(module); root.Controls.Add(filter, 0, 1);
+            FlowLayoutPanel bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Padding = new Padding(0, 7, 0, 7) }; UiTheme.ToolButton(refresh, "刷新列表", SystemIcons.Information); UiTheme.ToolButton(enable, "显示或安装", SystemIcons.Shield); UiTheme.ToolButton(disable, "隐藏或移除", SystemIcons.Warning); UiTheme.ToolButton(edit, "修改项目", SystemIcons.Application); UiTheme.ToolButton(add, "添加旧式菜单", SystemIcons.Information); UiTheme.ToolButton(delete, "删除项目", SystemIcons.Error); UiTheme.ToolButton(up, "向上移动", SystemIcons.Application); UiTheme.ToolButton(down, "向下移动", SystemIcons.Application);
+            foreach (Control c in new Control[] { refresh, enable, disable, edit, add, delete, up, down }) bar.Controls.Add(c); root.Controls.Add(bar, 0, 2);
             grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; grid.BackgroundColor = UiTheme.Surface;
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 145 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Module", HeaderText = "模块", FillWeight = 95 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 190 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); root.Controls.Add(grid, 0, 2); status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; root.Controls.Add(status, 0, 3);
+            grid.RowTemplate.Height = 34; grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "SoftwareIcon", HeaderText = "", Width = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ImageLayout = DataGridViewImageCellLayout.Normal }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 145 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SoftwareName", HeaderText = "关联软件", FillWeight = 110 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ModuleDisplay", HeaderText = "模块", FillWeight = 95 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 190 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); Panel gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface }; UiTheme.AttachModernScrollBar(gridHost, grid); root.Controls.Add(gridHost, 0, 3); status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; root.Controls.Add(status, 0, 4);
             refresh.Click += delegate { RefreshRows(); }; module.SelectedIndexChanged += delegate { ApplyFilter(); }; grid.SelectionChanged += delegate { UpdateActions(); }; enable.Click += delegate { Toggle(true); }; disable.Click += delegate { Toggle(false); }; delete.Click += delegate { DeleteCurrent(); }; edit.Click += delegate { EditCurrent(); }; add.Click += delegate { EditIe(null); }; up.Click += delegate { MoveSelected(-1); }; down.Click += delegate { MoveSelected(1); };
         }
 
@@ -542,16 +668,17 @@ namespace RogueCleanerV2
             if (!refresh.Enabled) return; refresh.Enabled = false; status.Text = "正在后台枚举高级菜单，不阻塞鼠标……";
             Task.Factory.StartNew(delegate { return new AdvancedMenuInventoryService(store).Enumerate(); }).ContinueWith(delegate(Task<AdvancedMenuInventory> task)
             {
-                if (IsDisposed || !IsHandleCreated) return; BeginInvoke((MethodInvoker)delegate { refresh.Enabled = true; if (task.IsFaulted) { Exception ex = task.Exception.GetBaseException(); Logger.Error("高级菜单枚举失败", ex); MessageBox.Show(this, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error); return; } inventory = task.Result; ApplyFilter(); status.Text = "共发现 " + inventory.Entries.Count + " 项；" + inventory.Warnings.Count + " 个位置已安全跳过。现代菜单仅列出包清单明确声明的 File Explorer 命令。"; });
+                if (IsDisposed || !IsHandleCreated) return; BeginInvoke((MethodInvoker)delegate { refresh.Enabled = true; if (task.IsFaulted) { Exception ex = task.Exception.GetBaseException(); Logger.Error("高级菜单枚举失败", ex); MessageBox.Show(this, ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error); return; } inventory = task.Result; foreach (AdvancedMenuEntry entry in inventory.Entries) { entry.SoftwareIcon = SoftwarePresentationResolver.PlaceholderIcon; entry.SoftwareName = "正在识别…"; } ApplyFilter(); SoftwarePresentationQueue.Hydrate(this, inventory.Entries, delegate { grid.Invalidate(); }); status.Text = "共发现 " + inventory.Entries.Count + " 项；" + inventory.Warnings.Count + " 个位置已安全跳过。现代菜单仅列出应用包清单明确声明的文件资源管理器命令。"; });
             });
         }
-        private void ApplyFilter() { if (inventory == null) return; string selected = Convert.ToString(module.SelectedItem); rows.RaiseListChangedEvents = false; rows.Clear(); foreach (AdvancedMenuEntry e in inventory.Entries) if (selected == "全部模块" || e.Module == selected) rows.Add(e); rows.RaiseListChangedEvents = true; rows.ResetBindings(); UpdateActions(); }
-        private void UpdateActions() { AdvancedMenuEntry e = Current(); enable.Enabled = e != null && !e.ReadOnly && !e.Enabled; disable.Enabled = e != null && !e.ReadOnly && e.Enabled; edit.Enabled = e != null && e.Module == "IE 旧式菜单"; delete.Enabled = e != null && (e.Module == "WinX 快捷菜单" || e.Module == "IE 旧式菜单" || (e.Module == "安全增强菜单" && e.Enabled)); up.Enabled = down.Enabled = e != null && e.Module == "WinX 快捷菜单" && e.Enabled; add.Enabled = Convert.ToString(module.SelectedItem) == "全部模块" || Convert.ToString(module.SelectedItem) == "IE 旧式菜单"; }
-        private void Toggle(bool value) { AdvancedMenuEntry e = Current(); if (e == null) return; try { new AdvancedContextMenuMutationService(store).SetEnabled(e, value); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
-        private void DeleteCurrent() { AdvancedMenuEntry e = Current(); if (e == null) return; if (MessageBox.Show(this, "删除“" + e.Name + "”？操作前会完整备份。", "高级右键兼容", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return; try { new AdvancedContextMenuMutationService(store).Delete(e); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
-        private void EditCurrent() { AdvancedMenuEntry e = Current(); if (e != null && e.Module == "IE 旧式菜单") EditIe(e); }
+        private void ApplyFilter() { if (inventory == null) return; string selected = AdvancedMenuDisplay.Key(Convert.ToString(module.SelectedItem)); rows.RaiseListChangedEvents = false; rows.Clear(); foreach (AdvancedMenuEntry e in inventory.Entries) if (selected == "全部模块" || e.Module == selected) rows.Add(e); rows.RaiseListChangedEvents = true; rows.ResetBindings(); UpdateActions(); }
+        private void UpdateActions() { AdvancedMenuEntry e = Current(); enable.Enabled = e != null && !e.ReadOnly && !e.Enabled; disable.Enabled = e != null && !e.ReadOnly && e.Enabled; edit.Enabled = e != null && e.Module == "IE 旧式菜单"; delete.Enabled = e != null && (e.Module == "WinX 快捷菜单" || e.Module == "IE 旧式菜单" || (e.Module == "安全增强菜单" && e.Enabled)); up.Enabled = down.Enabled = e != null && e.Module == "WinX 快捷菜单" && e.Enabled; add.Enabled = AdvancedMenuDisplay.Key(Convert.ToString(module.SelectedItem)) == "全部模块" || AdvancedMenuDisplay.Key(Convert.ToString(module.SelectedItem)) == "IE 旧式菜单"; }
+        private void Toggle(bool value) { AdvancedMenuEntry e = Current(); if (e == null || (e.RequiresAdmin && !EnsureAdministrator())) return; try { new AdvancedContextMenuMutationService(store).SetEnabled(e, value); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
+        private void DeleteCurrent() { AdvancedMenuEntry e = Current(); if (e == null || (e.RequiresAdmin && !EnsureAdministrator())) return; if (MessageBox.Show(this, "删除“" + e.Name + "”？操作前会完整备份。", "高级右键兼容", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return; try { new AdvancedContextMenuMutationService(store).Delete(e); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } }
+        private void EditCurrent() { AdvancedMenuEntry e = Current(); if (e != null && e.Module == "IE 旧式菜单" && (!e.RequiresAdmin || EnsureAdministrator())) EditIe(e); }
         private void EditIe(AdvancedMenuEntry e) { using (IeMenuEditorForm form = new IeMenuEditorForm(e)) { if (form.ShowDialog(this) != DialogResult.OK) return; try { new AdvancedContextMenuMutationService(store).AddOrEditIe(e, form.MenuName, form.Url, form.Contexts); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error); } } }
-        private void MoveSelected(int direction) { AdvancedMenuEntry e = Current(); if (e == null) return; try { new AdvancedContextMenuMutationService(store).MoveWinX(e, direction); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "调整失败", MessageBoxButtons.OK, MessageBoxIcon.Information); } }
+        private void MoveSelected(int direction) { AdvancedMenuEntry e = Current(); if (e == null || (e.RequiresAdmin && !EnsureAdministrator())) return; try { new AdvancedContextMenuMutationService(store).MoveWinX(e, direction); RefreshRows(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "调整失败", MessageBoxButtons.OK, MessageBoxIcon.Information); } }
+        private bool EnsureAdministrator() { if (AdminUtil.IsAdministrator()) return true; if (MessageBox.Show(this, "该项目属于所有用户范围，需要管理员权限。是否请求 Windows 管理员权限？\n\n重启后会重新打开右键管理，不会自动修改项目。", "需要管理员权限", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) AdminUtil.RelaunchAsAdmin(this, store, new ElevationResumeState { Page = "右键", OpenContextMenu = true }); return false; }
     }
 
     internal sealed class IeMenuEditorForm : Form
@@ -560,9 +687,9 @@ namespace RogueCleanerV2
         public string MenuName { get { return name.Text.Trim(); } } public string Url { get { return url.Text.Trim(); } } public int Contexts { get { return Convert.ToInt32(contexts.Value); } }
         public IeMenuEditorForm(AdvancedMenuEntry entry)
         {
-            Text = entry == null ? "添加 IE 旧式菜单" : "编辑 IE 旧式菜单"; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(680, 270); BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular);
+            Text = entry == null ? "添加 IE 旧式菜单" : "编辑 IE 旧式菜单"; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(680, 270); BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this);
             TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(22) }; root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); for (int i = 0; i < 3; i++) root.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); Controls.Add(root);
-            root.Controls.Add(new Label { Text = "菜单名称", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0); root.Controls.Add(name, 1, 0); root.Controls.Add(new Label { Text = "脚本 / 页面地址", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1); root.Controls.Add(url, 1, 1); root.Controls.Add(new Label { Text = "Contexts 位掩码", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2); contexts.Maximum = int.MaxValue; root.Controls.Add(contexts, 1, 2); name.Dock = url.Dock = contexts.Dock = DockStyle.Fill; name.Margin = url.Margin = contexts.Margin = new Padding(0, 10, 0, 10);
+            root.Controls.Add(new Label { Text = "菜单名称", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0); root.Controls.Add(name, 1, 0); root.Controls.Add(new Label { Text = "脚本或页面地址", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1); root.Controls.Add(url, 1, 1); root.Controls.Add(new Label { Text = "适用位置代码", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2); contexts.Maximum = int.MaxValue; root.Controls.Add(contexts, 1, 2); name.Dock = url.Dock = contexts.Dock = DockStyle.Fill; name.Margin = url.Margin = contexts.Margin = new Padding(0, 10, 0, 10);
             if (entry != null) { name.Text = entry.Name; url.Text = entry.Detail; contexts.Value = Math.Max(0, entry.Contexts); }
             FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft }; Button cancel = new Button(); UiTheme.OutlineButton(cancel, "取消", UiTheme.Muted); cancel.DialogResult = DialogResult.Cancel; Button ok = new Button(); UiTheme.PrimaryButton(ok, "保存", UiTheme.Primary); ok.Click += delegate { if (string.IsNullOrWhiteSpace(name.Text) || string.IsNullOrWhiteSpace(url.Text)) { MessageBox.Show(this, "名称和地址不能为空。", Text, MessageBoxButtons.OK, MessageBoxIcon.Information); return; } DialogResult = DialogResult.OK; }; actions.Controls.Add(cancel); actions.Controls.Add(ok); root.Controls.Add(actions, 1, 3); AcceptButton = ok; CancelButton = cancel;
         }
