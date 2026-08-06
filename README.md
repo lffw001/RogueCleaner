@@ -21,6 +21,15 @@ v2 改成 C# WinForms 单文件主程序：
 - 增加恢复中心，可以按批次回滚注册表、被移动文件、服务启动状态和计划任务状态。
 - 检查更新会从 GitHub Release 读取最新版，用户确认后下载直出 exe，替换完成后自动重启。
 
+## v2.0.13 更新
+
+- 将正常右键菜单管理与风险诊断分开，新增 Shell 命令、Shell 扩展、文件类型菜单和 CommandStore 管理。
+- 新增 ShellNew、SendTo、OpenWith、GUID 屏蔽、WinX、Windows 11 现代/UWP、IE 旧式菜单及安全增强菜单。
+- 受保护注册表项拒绝访问时记录警告并继续扫描，不再让单个位置终止整次扫描。
+- 通用弹窗、广告、守护行为标签不再冒充厂商身份，补充搜狗与未知 HotNews 的碰撞回归。
+- 计划任务操作改用 Windows 任务计划 COM；服务操作仍沿用原有 `sc.exe`，不通过 WMI 创建或修改服务。
+- 增加关于与开源致谢，说明 ContextMenuManager 的参考关系和独立实现边界。
+
 ## 使用方式
 
 普通用户下载 `流氓软件克星.exe` 后直接双击。
@@ -134,10 +143,10 @@ https://github.com/aakk007/RogueCleaner/releases
 当前推荐只下载 GitHub Release 里的直出 EXE：
 
 ```text
-RogueCleaner-v2.0.12-*.exe
+RogueCleaner-v2.0.13-*.exe
 ```
 
-压缩包主要给需要审查源码或保留完整发布包的人使用。每次打包会同时生成 `SHA256SUMS-v2.0.12-*.txt`，用于核对下载文件是否和发布文件一致。
+压缩包主要给需要审查源码或保留完整发布包的人使用。每次打包会同时生成 `SHA256SUMS-v2.0.13-*.txt`，用于核对下载文件是否和发布文件一致。
 
 如果安全软件提示风险，优先核对来源和 SHA256。这个工具会读取、备份、删除注册表项，禁用服务和计划任务，容易被启发式规则归为系统工具类风险；项目原则是不加壳、不混淆、不内嵌脚本、不做自解压一键包、不绕过安全软件。
 
@@ -190,11 +199,46 @@ v2 发布目录只包含 exe，不再包含 `.md`、`.ps1` 或规则目录。源
 
 这个参数会在默认窗口和最小窗口下检查“开始扫描”“清理勾选”“检查更新”“反馈”的可见性与排列，填充本地模拟结果验证右侧详情面板，并把主界面、最小窗口和反馈窗体截图写入 `reports`。它不扫描、清理或提交反馈。
 
+右键管理与权限回归（仅验证构建）：
+
+```powershell
+.\流氓软件克星.exe --permission-smoke
+.\流氓软件克星.exe --context-menu-smoke
+.\流氓软件克星.exe --special-menu-smoke
+.\流氓软件克星.exe --advanced-menu-smoke
+```
+
+前者模拟受保护注册表拒绝读取，验证整次扫描仍能完成并记录警告；后者使用 `CodexRogueCleanerTest` 前缀的当前用户测试项，执行枚举、禁用、备份、恢复和复核，并在结束后清理测试项。
+
 ## 识别反馈
 
 扫描后，可从顶部“反馈”入口反馈当前选中的结果，并选择误报、漏报、身份错误或关联错误；漏报不要求先选中扫描结果。程序只提取当前项目需要的字段，先在本地预览并脱敏，再保存到 `流氓软件克星数据\feedback`。选择“复制并打开 GitHub”后，详细内容进入剪贴板，浏览器打开结构化 Issue 表单，最终是否公开提交由用户确认。
 
 程序不会保存 GitHub Token，也不会在后台直接提交。默认不包含文件 SHA256，不上传文件或完整系统清单；用户名、SID、计算机名、用户目录、邮箱、URL、令牌和网络地址会被替换。GitHub Issue 仅作为待验证样本，后续需复核并转成回归用例，不能直接改变本机识别或清理规则。
+
+## 右键菜单管理
+
+左侧“右键管理”会独立列出正常和可疑的 Shell 命令、Shell 扩展、拖放处理器、文件类型菜单以及 CommandStore 命令仓库；它与流氓诊断的风险结果分开，不会因为出现在管理列表中就被判定为风险项。
+
+当前支持启用、禁用、编辑名称/图标/命令、添加菜单、添加级联子菜单、删除、复制详情和定位注册表。添加操作默认写入当前用户；所有修改都会保存原注册表值和子键结构，写入后立即复核，并可从恢复中心还原。
+
+“专用模块”进一步管理：
+
+- ShellNew 新建菜单：查看、添加空白/模板项、启停和删除。
+- SendTo 发送到：查看、创建快捷方式、移入禁用区、删除和恢复。
+- OpenWith 打开方式：覆盖 `OpenWithProgids`、`OpenWithList` 和 `Applications`，支持关联项启停、添加和恢复。
+- GUID 屏蔽：查看、添加或解除 `Shell Extensions\Blocked` 项。
+
+专用模块使用独立恢复清单，同时兼容现有恢复中心。验证构建可运行 `--special-menu-smoke`，在当前用户范围执行四类测试项的创建、枚举、禁用、恢复和清理。
+
+“高级兼容”继续覆盖：
+
+- WinX 快捷菜单：按 `Group1/2/3` 查看已有有效快捷方式，支持启用、禁用、删除、组内上移/下移和恢复。Windows 没有公开任意新建 WinX 项的受支持接口，因此不生成可能被系统拒绝的伪哈希快捷方式。
+- Windows 11 现代 / UWP 菜单：解析已安装包的 `AppxManifest.xml`，只列出明确声明 `windows.fileExplorerContextMenus` 的 `IExplorerCommand` CLSID；开关只写当前用户 `Shell Extensions\Blocked`，不修改应用包注册、文件或 ACL。
+- IE 旧式菜单：管理当前用户和所有用户的 `Internet Explorer\MenuExt`，支持添加、编辑、启停、删除和恢复；受保护位置拒绝访问时只报告错误，不接管权限。
+- 安全增强菜单：提供“复制完整路径”“用记事本打开”“在此处打开命令提示符”三项独立配方，不下载脚本、不取得 TrustedInstaller 权限，安装和移除都可从恢复中心撤销。
+
+验证构建的 `--advanced-menu-smoke` 使用隔离的 WinX 目录和当前用户测试注册表，覆盖文件移动、IE 菜单、现代菜单屏蔽值、增强配方及恢复，并在结束后清理测试项。现代菜单识别依据微软的 [File Explorer packaged context menu 文档](https://learn.microsoft.com/windows/apps/desktop/modernize/integrate-packaged-app-with-file-explorer)，不会把普通 Packaged COM 误当成右键菜单。
 
 发布前清理验收需单独编译验证版，正式发布版不带验收器，减少安全软件启发式误报：
 
@@ -218,3 +262,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Build-Exe.ps1 -ValidationB
 - 不默认卸载主程序。
 - 不删除用户文档。
 - 先备份，再清理，清理后复扫。
+
+## 开源致谢
+
+右键菜单管理的功能范围和交互设计参考了 [ContextMenuManager](https://github.com/BluePointLilac/ContextMenuManager)，原作者为蓝点lilac。该项目采用 GNU GPL v3；流氓软件克星没有复制或嵌入其源码、资源字典和图片，相关功能依据 Windows Shell 与注册表行为独立实现，本项目继续采用 MIT 许可证。

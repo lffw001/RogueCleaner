@@ -11,6 +11,7 @@ using System.Management;
 using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -25,15 +26,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.12.0")]
-[assembly: AssemblyFileVersion("2.0.12.0")]
+[assembly: AssemblyVersion("2.0.13.0")]
+[assembly: AssemblyFileVersion("2.0.13.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.12";
+        public const string Version = "2.0.13";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/home.php?mod=space&uid=286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -53,6 +54,14 @@ namespace RogueCleanerV2
             Application.SetCompatibleTextRenderingDefault(false);
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
 
+            int copyPathIndex = Array.FindIndex(args, delegate(string arg) { return string.Equals(arg, "--copy-path", StringComparison.OrdinalIgnoreCase); });
+            if (copyPathIndex >= 0)
+            {
+                if (copyPathIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[copyPathIndex + 1])) return 8;
+                try { Clipboard.SetText(args[copyPathIndex + 1]); return 0; }
+                catch (Exception ex) { MessageBox.Show("复制路径失败：" + ex.Message, AppMeta.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error); return 8; }
+            }
+
             DataStore store = DataStore.CreateForExecutable(Application.ExecutablePath);
             store.Ensure();
             Logger.Initialize(store);
@@ -62,6 +71,10 @@ namespace RogueCleanerV2
             bool uiSmoke = HasArg(args, "--ui-smoke");
 #if VALIDATION
             bool acceptance = HasArg(args, "--acceptance-test");
+            bool permissionSmoke = HasArg(args, "--permission-smoke");
+            bool contextMenuSmoke = HasArg(args, "--context-menu-smoke");
+            bool specialMenuSmoke = HasArg(args, "--special-menu-smoke");
+            bool advancedMenuSmoke = HasArg(args, "--advanced-menu-smoke");
 #endif
 
             try
@@ -72,6 +85,34 @@ namespace RogueCleanerV2
                     int exitCode = ValidationRunner.Run(store);
                     Environment.ExitCode = exitCode;
                     return exitCode;
+                }
+                if (permissionSmoke)
+                {
+                    List<string> failures = PermissionRegression.Run();
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "permission-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 5;
+                    return Environment.ExitCode;
+                }
+                if (contextMenuSmoke)
+                {
+                    List<string> failures = ContextMenuManagementRegression.Run(store);
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "context-menu-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 6;
+                    return Environment.ExitCode;
+                }
+                if (specialMenuSmoke)
+                {
+                    List<string> failures = SpecialContextMenuRegression.Run(store);
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "special-menu-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 7;
+                    return Environment.ExitCode;
+                }
+                if (advancedMenuSmoke)
+                {
+                    List<string> failures = AdvancedContextMenuRegression.Run(store);
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "advanced-menu-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), failures);
+                    Environment.ExitCode = failures.Count == 0 ? 0 : 9;
+                    return Environment.ExitCode;
                 }
 #endif
                 if (identitySmoke)
@@ -97,8 +138,18 @@ namespace RogueCleanerV2
                 }
                 if (smoke)
                 {
-                    List<Finding> findings = new ScannerEngine().ScanAll(null);
-                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "scan-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), findings);
+                    ScannerEngine scanner = new ScannerEngine();
+                    List<Finding> findings = scanner.ScanAll(null);
+                    List<ScanWarning> scanWarnings = scanner.Warnings;
+                    CleanerEngine.WriteJson(Path.Combine(store.Reports, "scan-smoke-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json"), new ScanEvidenceReport
+                    {
+                        ScannedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                        ProductVersion = AppMeta.Version,
+                        FindingCount = findings.Count,
+                        WarningCount = scanWarnings.Count,
+                        Findings = findings,
+                        Warnings = scanWarnings
+                    });
                     Environment.ExitCode = 0;
                     return 0;
                 }
@@ -378,6 +429,24 @@ namespace RogueCleanerV2
         public string StackTrace { get; set; }
     }
 
+    internal sealed class ScanWarning
+    {
+        public string Stage { get; set; }
+        public string TechnicalLocation { get; set; }
+        public string ErrorType { get; set; }
+        public string Message { get; set; }
+    }
+
+    internal sealed class ScanEvidenceReport
+    {
+        public string ScannedAt { get; set; }
+        public string ProductVersion { get; set; }
+        public int FindingCount { get; set; }
+        public int WarningCount { get; set; }
+        public List<Finding> Findings { get; set; }
+        public List<ScanWarning> Warnings { get; set; }
+    }
+
     internal sealed class RestoreBatchResult
     {
         public int Total { get; set; }
@@ -472,6 +541,7 @@ namespace RogueCleanerV2
             public string Name;
             public string Snark;
             public int Boost;
+            public bool BehaviorOnly;
             public string[] Patterns;
             public string[] BadComponents;
         }
@@ -497,8 +567,8 @@ namespace RogueCleanerV2
             new VendorRule { Name = "国产影音/游戏大厅", Snark = "看个视频玩个游戏，不需要抢文件关联和开机席位。", Boost = 10, Patterns = new [] { "iQIYI", "爱奇艺", "Qiyi", "Youku", "优酷", "Kugou", "酷狗", "Kuwo", "酷我", "PPTV", "暴风", "Baofeng", "QQLive", "TencentVideo", "腾讯视频", "XunleiMedia", "Bilibili", "芒果TV", "MangoTV", "WeGame", "SteamChina" }, BadComponents = new [] { "iQIYI", "Qiyi", "Youku", "Kugou", "Kuwo", "PPTV", "Baofeng", "QQLive", "TencentVideo" } },
             new VendorRule { Name = "PDF/办公捆绑工具", Snark = "读个 PDF，也别顺手接管全系统打开方式。", Boost = 10, Patterns = new [] { "JisuPDF", "极速PDF", "SwiftPDF", "迅捷PDF", "Foxit", "福昕", "CAJViewer", "PDFReader", "PDFSuite", "PDFMaster", "嗨格式", "HiFormat" }, BadComponents = new [] { "JisuPDF", "SwiftPDF", "PDFMaster", "HiFormat" } },
             new VendorRule { Name = "预装管家/厂商助手", Snark = "出厂自带不等于可以偷偷常驻。", Boost = 8, Patterns = new [] { "LenovoUtility", "LenovoVantage", "联想电脑管家", "LenovoPcManager", "Huawei PC Manager", "华为电脑管家", "HonorPCManager", "荣耀电脑管家", "MiService", "小米电脑管家", "MyASUS", "华硕电脑管家", "AcerCare", "Dell SupportAssist" }, BadComponents = new [] { "LenovoPcManager", "Huawei PC Manager", "HonorPCManager", "MiService", "SupportAssist" } },
-            new VendorRule { Name = "弹窗广告/推广组件", Snark = "关掉没一会儿又弹，这类小广告最会装死。", Boost = 22, Patterns = new [] { "SogouNews", "SogouPopup", "SogouTips", "SogouAd", "SogouInputPop", "2345MiniPage", "MiniNews", "HotNews", "NewsPop", "PopNews", "PopWnd", "AdPop", "AdService", "AdPush", "WpsNotify", "KNotify", "BaiduTips", "BaiduNews", "QQBrowserMini", "KugouTips", "KuwoNews", "QiyiNews", "YoukuNews", "LuDaShiNews", "MasterLuMini", "DriverGeniusNews", "KuaiZipNews", "HaoZipMiniPage", "今日热点", "每日热点", "热点资讯", "迷你页", "推荐弹窗", "广告弹窗" }, BadComponents = new [] { "SogouNews", "SogouPopup", "2345MiniPage", "AdPop", "AdService", "WpsNotify", "BaiduTips", "LuDaShiNews", "KuaiZipNews" } },
-            new VendorRule { Name = "守护/自动恢复组件", Snark = "你关它一次，它守护进程能把自己续上三回。", Boost = 20, Patterns = new [] { "QHWatchdog", "QHProtected", "QHActiveDefense", "SGImeGuard", "SogouImeBroker", "XLServicePlatform", "ThunderPlatform", "BaiduYunDetect", "YunDetectService", "BaiduNetdiskUtility", "QQProtect", "QQPCRTP", "2345Protect", "2345Svc", "KSafeSvc", "KWatch", "LdsDaemon", "LdsSvc", "FlashHelperService", "FlashCenter", "DriverGeniusDaemon", "DTLService", "LuDaShiDaemon" }, BadComponents = new [] { "QHWatchdog", "QHProtected", "SGImeGuard", "XLServicePlatform", "BaiduYunDetect", "QQProtect", "2345Protect", "KSafeSvc", "LdsDaemon", "FlashHelperService" } }
+            new VendorRule { Name = "弹窗广告/推广组件", Snark = "关掉没一会儿又弹，这类小广告最会装死。", Boost = 22, BehaviorOnly = true, Patterns = new [] { "SogouNews", "SogouPopup", "SogouTips", "SogouAd", "SogouInputPop", "2345MiniPage", "MiniNews", "HotNews", "NewsPop", "PopNews", "PopWnd", "AdPop", "AdService", "AdPush", "WpsNotify", "KNotify", "BaiduTips", "BaiduNews", "QQBrowserMini", "KugouTips", "KuwoNews", "QiyiNews", "YoukuNews", "LuDaShiNews", "MasterLuMini", "DriverGeniusNews", "KuaiZipNews", "HaoZipMiniPage", "今日热点", "每日热点", "热点资讯", "迷你页", "推荐弹窗", "广告弹窗" }, BadComponents = new [] { "SogouNews", "SogouPopup", "2345MiniPage", "AdPop", "AdService", "WpsNotify", "BaiduTips", "LuDaShiNews", "KuaiZipNews" } },
+            new VendorRule { Name = "守护/自动恢复组件", Snark = "你关它一次，它守护进程能把自己续上三回。", Boost = 20, BehaviorOnly = true, Patterns = new [] { "QHWatchdog", "QHProtected", "QHActiveDefense", "SGImeGuard", "SogouImeBroker", "XLServicePlatform", "ThunderPlatform", "BaiduYunDetect", "YunDetectService", "BaiduNetdiskUtility", "QQProtect", "QQPCRTP", "2345Protect", "2345Svc", "KSafeSvc", "KWatch", "LdsDaemon", "LdsSvc", "FlashHelperService", "FlashCenter", "DriverGeniusDaemon", "DTLService", "LuDaShiDaemon" }, BadComponents = new [] { "QHWatchdog", "QHProtected", "SGImeGuard", "XLServicePlatform", "BaiduYunDetect", "QQProtect", "2345Protect", "KSafeSvc", "LdsDaemon", "FlashHelperService" } }
         };
 
         private sealed class CandidateScore
@@ -590,6 +660,7 @@ namespace RogueCleanerV2
                 CandidateScore candidate = ScoreRule(rule, evidence);
                 if (candidate.Score > 0) candidates.Add(candidate);
             }
+            candidates = candidates.Where(delegate(CandidateScore item) { return !item.Rule.BehaviorOnly; }).ToList();
             candidates = candidates.OrderByDescending(delegate(CandidateScore item) { return item.Strong; })
                 .ThenByDescending(delegate(CandidateScore item) { return item.Score; }).ToList();
             if (candidates.Count == 0)
@@ -1024,6 +1095,9 @@ namespace RogueCleanerV2
 
             VendorIdentityResult sogou = ResolveIdentity(new VendorEvidence().AddHuman("搜狗输入法").AddPublisher("Sogou.com").AddProduct("Sogou Input Method"));
             if (!sogou.Confirmed || sogou.Vendor != "搜狗") failures.Add("明确 Publisher+产品名未识别为搜狗");
+            VendorIdentityResult sogouPopup = ResolveIdentity(new VendorEvidence().AddHuman("CodexRogueCleanerTest_SogouInputPop").AddCommand(@"C:\CodexRogueCleanerTest\Sogou\SogouInputPop.exe"));
+            if (!sogouPopup.Confirmed || sogouPopup.Vendor != "搜狗") failures.Add("搜狗弹窗组件被通用行为标签阻断厂商识别");
+            AssertUnknown(failures, "通用弹窗行为不能冒充厂商", new VendorEvidence().AddHuman("HotNews").AddCommand(@"C:\Unknown\HotNews.exe"));
 
             VendorIdentityResult conflict = ResolveIdentity(new VendorEvidence()
                 .AddPublisher("Sogou.com", "Thunder Network Technologies")
@@ -1078,6 +1152,10 @@ namespace RogueCleanerV2
 
     internal static class RegistryHelper
     {
+#if VALIDATION
+        internal static Func<ActionTarget, bool, Exception> TestOpenFailureInjector;
+#endif
+
         public static string NativePath(ActionTarget target)
         {
             string hive = target.Hive == "HKLM" ? "HKLM" : "HKCU";
@@ -1095,8 +1173,18 @@ namespace RogueCleanerV2
 
         public static RegistryKey OpenSubKey(ActionTarget target, bool writable)
         {
-            RegistryKey root = OpenBase(target.Hive, target.View, writable);
-            return root.OpenSubKey(target.SubKey, writable);
+#if VALIDATION
+            Func<ActionTarget, bool, Exception> injector = TestOpenFailureInjector;
+            if (injector != null)
+            {
+                Exception injected = injector(target, writable);
+                if (injected != null) throw injected;
+            }
+#endif
+            using (RegistryKey root = OpenBase(target.Hive, target.View, writable))
+            {
+                return root.OpenSubKey(target.SubKey, writable);
+            }
         }
 
         public static bool KeyExists(ActionTarget target)
@@ -1133,8 +1221,70 @@ namespace RogueCleanerV2
         }
     }
 
+    internal static class WindowsTaskApi
+    {
+        public static bool TryGetEnabled(string taskPath, out bool enabled)
+        {
+            enabled = false;
+            try { dynamic task = GetTask(taskPath); enabled = Convert.ToBoolean(task.Enabled); return true; }
+            catch { return false; }
+        }
+
+        public static bool SetEnabled(string taskPath, bool enabled)
+        {
+            dynamic task = GetTask(taskPath); task.Enabled = enabled; bool actual; return TryGetEnabled(taskPath, out actual) && actual == enabled;
+        }
+
+        public static string GetXml(string taskPath)
+        {
+            try { dynamic task = GetTask(taskPath); return Convert.ToString(task.Xml); }
+            catch { return string.Empty; }
+        }
+
+        public static bool RegisterFromXml(string taskPath, string xml)
+        {
+            if (string.IsNullOrWhiteSpace(xml)) return false; string folderPath, name; Split(taskPath, out folderPath, out name);
+            dynamic service = Connect(); dynamic folder = service.GetFolder(folderPath);
+            folder.RegisterTask(name, xml, 6, null, null, 3, null);
+            bool enabled; return TryGetEnabled(taskPath, out enabled);
+        }
+
+        public static bool CreateValidationTask(string taskPath, string executable)
+        {
+            string folderPath, name; Split(taskPath, out folderPath, out name); dynamic service = Connect(); dynamic folder = service.GetFolder(folderPath); dynamic definition = service.NewTask(0);
+            definition.RegistrationInfo.Description = "RogueCleaner validation task"; definition.Settings.Enabled = true; definition.Settings.StartWhenAvailable = true;
+            definition.Principal.UserId = WindowsIdentity.GetCurrent().Name; definition.Principal.LogonType = 3; definition.Principal.RunLevel = 1;
+            dynamic trigger = definition.Triggers.Create(2); trigger.StartBoundary = DateTime.Now.AddMinutes(10).ToString("s"); trigger.DaysInterval = 1;
+            dynamic action = definition.Actions.Create(0); action.Path = executable;
+            folder.RegisterTaskDefinition(name, definition, 6, null, null, 3, null);
+            bool enabled; return TryGetEnabled(taskPath, out enabled) && enabled;
+        }
+
+        public static bool Delete(string taskPath)
+        {
+            try { string folderPath, name; Split(taskPath, out folderPath, out name); dynamic service = Connect(); dynamic folder = service.GetFolder(folderPath); folder.DeleteTask(name, 0); bool enabled; return !TryGetEnabled(taskPath, out enabled); }
+            catch { bool enabled; return !TryGetEnabled(taskPath, out enabled); }
+        }
+
+        private static dynamic GetTask(string taskPath) { string folderPath, name; Split(taskPath, out folderPath, out name); dynamic service = Connect(); dynamic folder = service.GetFolder(folderPath); return folder.GetTask(name); }
+        private static dynamic Connect() { Type type = Type.GetTypeFromProgID("Schedule.Service"); if (type == null) throw new InvalidOperationException("系统未提供任务计划 COM 服务。"); dynamic service = Activator.CreateInstance(type); service.Connect(); return service; }
+        private static void Split(string taskPath, out string folderPath, out string name) { string normalized = (taskPath ?? string.Empty).Trim(); if (!normalized.StartsWith("\\", StringComparison.Ordinal)) normalized = "\\" + normalized; int slash = normalized.LastIndexOf('\\'); folderPath = slash <= 0 ? "\\" : normalized.Substring(0, slash); name = normalized.Substring(slash + 1); if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("计划任务路径无效。"); }
+    }
+
     internal sealed class ScannerEngine
     {
+        private readonly object warningGate = new object();
+        private readonly List<ScanWarning> warnings = new List<ScanWarning>();
+        private readonly HashSet<string> warningKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public List<ScanWarning> Warnings
+        {
+            get
+            {
+                lock (warningGate) return new List<ScanWarning>(warnings);
+            }
+        }
+
         private static readonly string[] ContextRoots = new string[]
         {
             @"Software\Classes\*\shell",
@@ -1211,20 +1361,25 @@ namespace RogueCleanerV2
 
         public List<Finding> ScanAll(IProgressSink sink)
         {
+            lock (warningGate)
+            {
+                warnings.Clear();
+                warningKeys.Clear();
+            }
             List<Finding> all = new List<Finding>();
             object gate = new object();
             List<Action> scanners = new List<Action>();
 
-            scanners.Add(delegate { AddRange(all, gate, sink, "右键菜单", ScanContextMenus()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "此电脑入口", ScanExplorerNamespaces()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "开机启动", ScanStartupRegistry()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "启动文件夹", ScanStartupFolders()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "后台服务", ScanServices()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "浏览器插件", ScanBrowserExtensions()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "文件关联", ScanFileAssociations()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "计划任务", ScanScheduledTasks()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "隐藏卸载入口", ScanHiddenInstalledComponents()); });
-            scanners.Add(delegate { AddRange(all, gate, sink, "正在运行的弹窗/守护", ScanRunningAdAndGuardProcesses()); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "右键菜单", ScanContextMenus); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "此电脑入口", ScanExplorerNamespaces); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "开机启动", ScanStartupRegistry); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "启动文件夹", ScanStartupFolders); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "后台服务", ScanServices); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "浏览器插件", ScanBrowserExtensions); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "文件关联", ScanFileAssociations); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "计划任务", ScanScheduledTasks); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "隐藏卸载入口", ScanHiddenInstalledComponents); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "正在运行的弹窗/守护", ScanRunningAdAndGuardProcesses); });
 
             Parallel.Invoke(new ParallelOptions
             {
@@ -1241,6 +1396,59 @@ namespace RogueCleanerV2
                 .ToList();
             for (int i = 0; i < sorted.Count; i++) sorted[i].Id = i + 1;
             return sorted;
+        }
+
+        private void RunScanner(List<Finding> all, object gate, IProgressSink sink, string stage, Func<List<Finding>> scanner)
+        {
+            try
+            {
+                AddRange(all, gate, sink, stage, scanner());
+            }
+            catch (SecurityException ex)
+            {
+                RecordWarning(stage, null, ex);
+                if (sink != null) sink.Stage("扫描：" + stage + "，部分受保护位置无法读取，已继续");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                RecordWarning(stage, null, ex);
+                if (sink != null) sink.Stage("扫描：" + stage + "，部分受保护位置无法读取，已继续");
+            }
+        }
+
+        private RegistryKey OpenForScan(ActionTarget target, string stage)
+        {
+            try
+            {
+                return RegistryHelper.OpenSubKey(target, false);
+            }
+            catch (SecurityException ex)
+            {
+                RecordWarning(stage, target, ex);
+                return null;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                RecordWarning(stage, target, ex);
+                return null;
+            }
+        }
+
+        private void RecordWarning(string stage, ActionTarget target, Exception ex)
+        {
+            string location = target == null ? "未定位到具体子项" : RegistryHelper.NativePath(target) + (string.IsNullOrWhiteSpace(target.View) || target.View == "Default" ? string.Empty : " (" + target.View + ")");
+            string key = stage + "|" + location + "|" + ex.GetType().FullName;
+            lock (warningGate)
+            {
+                if (!warningKeys.Add(key)) return;
+                warnings.Add(new ScanWarning
+                {
+                    Stage = stage,
+                    TechnicalLocation = location,
+                    ErrorType = ex.GetType().FullName,
+                    Message = "访问被系统拒绝，已跳过该位置并继续扫描。"
+                });
+            }
         }
 
         private static void AddRange(List<Finding> all, object gate, IProgressSink sink, string stage, List<Finding> findings)
@@ -1261,7 +1469,7 @@ namespace RogueCleanerV2
             List<Finding> list = new List<Finding>();
             foreach (ActionTarget root in RegistryTargets(ContextRoots, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                using (RegistryKey key = OpenForScan(root, "右键菜单"))
                 {
                     if (key == null) continue;
                     foreach (string childName in SafeSubKeyNames(key))
@@ -1269,7 +1477,7 @@ namespace RogueCleanerV2
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryKey";
                         target.SubKey = root.SubKey + "\\" + childName;
-                        using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
+                        using (RegistryKey child = OpenForScan(target, "右键菜单"))
                         {
                             string display = ReadString(child, "");
                             string mui = ReadString(child, "MUIVerb");
@@ -1300,7 +1508,7 @@ namespace RogueCleanerV2
             List<Finding> list = new List<Finding>();
             foreach (ActionTarget root in RegistryTargets(StartupRoots, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                using (RegistryKey key = OpenForScan(root, "开机启动"))
                 {
                     if (key == null) continue;
                     foreach (string valueName in SafeValueNames(key))
@@ -1351,7 +1559,7 @@ namespace RogueCleanerV2
             List<Finding> list = new List<Finding>();
             foreach (ActionTarget root in RegistryTargets(BrowserRoots, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                using (RegistryKey key = OpenForScan(root, "浏览器插件"))
                 {
                     if (key == null) continue;
                     foreach (string valueName in SafeValueNames(key))
@@ -1373,7 +1581,7 @@ namespace RogueCleanerV2
                         target.Kind = "DeleteRegistryKey";
                         target.SubKey = root.SubKey + "\\" + childName;
                         string childDefault;
-                        using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
+                        using (RegistryKey child = OpenForScan(target, "浏览器插件"))
                         {
                             childDefault = ReadString(child, "");
                         }
@@ -1394,7 +1602,7 @@ namespace RogueCleanerV2
             List<Finding> list = new List<Finding>();
             foreach (ActionTarget root in RegistryTargets(ExplorerNamespaceRoots, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                using (RegistryKey key = OpenForScan(root, "此电脑入口"))
                 {
                     if (key == null) continue;
                     foreach (string childName in SafeSubKeyNames(key))
@@ -1402,7 +1610,7 @@ namespace RogueCleanerV2
                         ActionTarget target = CopyTarget(root);
                         target.Kind = "DeleteRegistryKey";
                         target.SubKey = root.SubKey + "\\" + childName;
-                        using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
+                        using (RegistryKey child = OpenForScan(target, "此电脑入口"))
                         {
                             string display = ReadString(child, "");
                             string localized = ReadString(child, "LocalizedString");
@@ -1423,14 +1631,14 @@ namespace RogueCleanerV2
 
             foreach (ActionTarget root in RegistryTargets(ExplorerNamespaceClsidRoots, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                using (RegistryKey key = OpenForScan(root, "此电脑入口"))
                 {
                     if (key == null) continue;
                     foreach (string childName in SafeSubKeyNames(key))
                     {
                         ActionTarget clsidTarget = CopyTarget(root);
                         clsidTarget.SubKey = root.SubKey + "\\" + childName;
-                        using (RegistryKey child = RegistryHelper.OpenSubKey(clsidTarget, false))
+                        using (RegistryKey child = OpenForScan(clsidTarget, "此电脑入口"))
                         {
                             string pinned = ReadString(child, "System.IsPinnedToNameSpaceTree");
                             if (!IsTruthy(pinned)) continue;
@@ -1464,14 +1672,14 @@ namespace RogueCleanerV2
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (ActionTarget root in RegistryTargets(InstalledRoots, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(root, false))
+                using (RegistryKey key = OpenForScan(root, "隐藏卸载入口"))
                 {
                     if (key == null) continue;
                     foreach (string childName in SafeSubKeyNames(key))
                     {
                         ActionTarget target = CopyTarget(root);
                         target.SubKey = root.SubKey + "\\" + childName;
-                        using (RegistryKey child = RegistryHelper.OpenSubKey(target, false))
+                        using (RegistryKey child = OpenForScan(target, "隐藏卸载入口"))
                         {
                             if (child == null) continue;
                             string display = ReadString(child, "DisplayName");
@@ -1566,7 +1774,7 @@ namespace RogueCleanerV2
             {
                 foreach (ActionTarget extTarget in RegistryTargets(new string[] { @"Software\Classes\" + ext }, true, true))
                 {
-                    using (RegistryKey extKey = RegistryHelper.OpenSubKey(extTarget, false))
+                    using (RegistryKey extKey = OpenForScan(extTarget, "文件关联"))
                     {
                         if (extKey == null) continue;
                         string defaultProgId = ReadString(extKey, "");
@@ -1575,7 +1783,7 @@ namespace RogueCleanerV2
                             ActionTarget classTarget = CopyTarget(extTarget);
                             classTarget.Kind = "DeleteRegistryKey";
                             classTarget.SubKey = @"Software\Classes\" + defaultProgId;
-                            using (RegistryKey classKey = RegistryHelper.OpenSubKey(classTarget, false))
+                            using (RegistryKey classKey = OpenForScan(classTarget, "文件关联"))
                             {
                                 string command = ReadDefault(classTarget, @"shell\open\command");
                                 string text = Join(ext, defaultProgId, command);
@@ -1593,7 +1801,7 @@ namespace RogueCleanerV2
                         {
                             ActionTarget subTarget = CopyTarget(extTarget);
                             subTarget.SubKey = extTarget.SubKey + "\\" + sub;
-                            using (RegistryKey subKey = RegistryHelper.OpenSubKey(subTarget, false))
+                            using (RegistryKey subKey = OpenForScan(subTarget, "文件关联"))
                             {
                                 if (subKey == null) continue;
                                 foreach (string valueName in SafeValueNames(subKey))
@@ -1787,17 +1995,17 @@ namespace RogueCleanerV2
             try { return Convert.ToString(key.GetValue(name, "")); } catch { return string.Empty; }
         }
 
-        private static string ReadDefault(ActionTarget target, string child)
+        private string ReadDefault(ActionTarget target, string child)
         {
             ActionTarget t = CopyTarget(target);
             t.SubKey = target.SubKey + "\\" + child;
-            using (RegistryKey key = RegistryHelper.OpenSubKey(t, false))
+            using (RegistryKey key = OpenForScan(t, "右键菜单"))
             {
                 return ReadString(key, "");
             }
         }
 
-        private static string ResolveClsidRegistration(params string[] values)
+        private string ResolveClsidRegistration(params string[] values)
         {
             StringBuilder sb = new StringBuilder();
             foreach (string value in values)
@@ -1829,13 +2037,13 @@ namespace RogueCleanerV2
             }
         }
 
-        private static string ReadClsidInfo(string clsid)
+        private string ReadClsidInfo(string clsid)
         {
             List<string> parts = new List<string>();
             string subKey = @"Software\Classes\CLSID\" + clsid;
             foreach (ActionTarget target in RegistryTargets(new string[] { subKey }, true, true))
             {
-                using (RegistryKey key = RegistryHelper.OpenSubKey(target, false))
+                using (RegistryKey key = OpenForScan(target, "CLSID 解析"))
                 {
                     if (key == null) continue;
                     parts.Add(ReadString(key, ""));
@@ -1847,21 +2055,21 @@ namespace RogueCleanerV2
             return Join(parts.ToArray());
         }
 
-        private static string ReadChildDefault(ActionTarget target, string child)
+        private string ReadChildDefault(ActionTarget target, string child)
         {
             ActionTarget childTarget = CopyTarget(target);
             childTarget.SubKey = target.SubKey + "\\" + child;
-            using (RegistryKey key = RegistryHelper.OpenSubKey(childTarget, false))
+            using (RegistryKey key = OpenForScan(childTarget, "注册表子项"))
             {
                 return ReadString(key, "");
             }
         }
 
-        private static string ReadChildValue(ActionTarget target, string child, string valueName)
+        private string ReadChildValue(ActionTarget target, string child, string valueName)
         {
             ActionTarget childTarget = CopyTarget(target);
             childTarget.SubKey = target.SubKey + "\\" + child;
-            using (RegistryKey key = RegistryHelper.OpenSubKey(childTarget, false))
+            using (RegistryKey key = OpenForScan(childTarget, "注册表子项"))
             {
                 return ReadString(key, valueName);
             }
@@ -2299,7 +2507,7 @@ namespace RogueCleanerV2
                     bool wasEnabled;
                     WriteText(Path.Combine(taskDir, "state.txt"), TryGetScheduledTaskEnabled(target.TaskName, out wasEnabled) && wasEnabled ? "Enabled" : "Disabled");
                     result.Backup = taskDir;
-                    RunHidden("schtasks.exe", "/Change /TN \"" + target.TaskName + "\" /Disable");
+                    if (!WindowsTaskApi.SetEnabled(target.TaskName, false)) throw new InvalidOperationException("计划任务禁用失败。");
                     result.Status = VerifyApplied(target) ? "Done" : "Failed";
                     result.Message = result.Status == "Done" ? "计划任务已禁用。" : "复核失败：计划任务仍未禁用。";
                 }
@@ -2402,6 +2610,31 @@ namespace RogueCleanerV2
                 }
 
                 ActionTarget target = result.Target;
+                string backup = ResolveExistingBackupPath(batch, result);
+                if (target.Kind == "RestoreContextMenuToggle" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
+                {
+                    bool restored = ContextMenuMutationService.Restore(backup);
+                    message = result.Title + "：" + (restored ? "右键菜单状态已恢复。" : "右键菜单恢复后复核失败。");
+                    return restored;
+                }
+                if (target.Kind == "RestoreContextMenuTree" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
+                {
+                    bool restored = ContextMenuMutationService.RestoreTree(backup);
+                    message = result.Title + "：" + (restored ? "右键菜单配置已恢复。" : "右键菜单配置恢复后复核失败。");
+                    return restored;
+                }
+                if (target.Kind == "RestoreSpecialMenu" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
+                {
+                    bool restored = SpecialContextMenuMutationService.Restore(backup);
+                    message = result.Title + "：" + (restored ? "专用菜单配置已恢复。" : "专用菜单配置恢复后复核失败。");
+                    return restored;
+                }
+                if (target.Kind == "RestoreAdvancedMenu" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
+                {
+                    bool restored = AdvancedContextMenuMutationService.Restore(backup);
+                    message = result.Title + "：" + (restored ? "高级菜单配置已恢复。" : "高级菜单恢复后复核失败。");
+                    return restored;
+                }
                 if ((target.Kind == "DeleteRegistryKey" || target.Kind == "DeleteRegistryValue") &&
                     target != null)
                 {
@@ -2416,7 +2649,6 @@ namespace RogueCleanerV2
                     message = result.Title + "：" + (restored ? "注册表已恢复。" : "注册表恢复后复核失败。reg import 退出码 " + exitCode);
                     return exitCode == 0 && restored;
                 }
-                string backup = ResolveExistingBackupPath(batch, result);
                 if (target.Kind == "MoveFileToBackup" && !string.IsNullOrEmpty(backup) && File.Exists(backup))
                 {
                     string dest = Environment.ExpandEnvironmentVariables(target.FilePath);
@@ -2450,21 +2682,21 @@ namespace RogueCleanerV2
                     string stateFile = Path.Combine(backup, "state.txt");
                     if (!ScheduledTaskExists(target.TaskName) && File.Exists(xml))
                     {
-                        int createCode = RunHidden("schtasks.exe", "/Create /TN \"" + target.TaskName + "\" /XML \"" + xml + "\" /F");
-                        if (createCode != 0)
+                        bool created = WindowsTaskApi.RegisterFromXml(target.TaskName, File.ReadAllText(xml));
+                        if (!created)
                         {
-                            message = result.Title + "：计划任务重建失败，退出码 " + createCode;
+                            message = result.Title + "：计划任务重建失败。";
                             return false;
                         }
                     }
                     string state = File.Exists(stateFile) ? File.ReadAllText(stateFile, Encoding.UTF8) : "Enabled";
                     bool shouldDisable = state.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) >= 0;
-                    int changeCode = RunHidden("schtasks.exe", "/Change /TN \"" + target.TaskName + "\" " + (shouldDisable ? "/Disable" : "/Enable"));
+                    bool changed = WindowsTaskApi.SetEnabled(target.TaskName, !shouldDisable);
                     bool enabled;
                     bool exists = TryGetScheduledTaskEnabled(target.TaskName, out enabled);
                     bool restored = exists && (shouldDisable ? !enabled : enabled);
-                    message = result.Title + "：" + (restored ? "计划任务状态已恢复。" : "计划任务恢复后复核失败，命令退出码 " + changeCode);
-                    return changeCode == 0 && restored;
+                    message = result.Title + "：" + (restored ? "计划任务状态已恢复。" : "计划任务恢复后复核失败。");
+                    return changed && restored;
                 }
 
                 message = result.Title + "：没有可用备份，无法恢复。";
@@ -2623,10 +2855,7 @@ namespace RogueCleanerV2
             {
                 using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name,StartMode FROM Win32_Service WHERE Name='" + serviceName.Replace("'", "''") + "'"))
                 {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        return Convert.ToString(obj["StartMode"]);
-                    }
+                    foreach (ManagementObject obj in searcher.Get()) return Convert.ToString(obj["StartMode"]);
                 }
             }
             catch { }
@@ -2640,26 +2869,7 @@ namespace RogueCleanerV2
 
         private static string QueryTaskXml(string taskName)
         {
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo("schtasks.exe", "/Query /TN \"" + taskName + "\" /XML");
-                psi.CreateNoWindow = true;
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                using (Process process = Process.Start(psi))
-                {
-                    string output = process.StandardOutput.ReadToEnd();
-                    string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit(30000);
-                    return string.IsNullOrWhiteSpace(output) ? error : output;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("备份计划任务失败：" + taskName, ex);
-                return string.Empty;
-            }
+            string xml = WindowsTaskApi.GetXml(taskName); if (string.IsNullOrWhiteSpace(xml)) Logger.Error("备份计划任务失败：" + taskName, new InvalidOperationException("任务 XML 为空。")); return xml;
         }
 
         private static bool ScheduledTaskExists(string taskName)
@@ -2670,27 +2880,7 @@ namespace RogueCleanerV2
 
         private static bool TryGetScheduledTaskEnabled(string taskName, out bool enabled)
         {
-            enabled = false;
-            try
-            {
-                if (string.IsNullOrEmpty(taskName)) return false;
-                string normalized = taskName.StartsWith("\\", StringComparison.Ordinal) ? taskName : "\\" + taskName;
-                int slash = normalized.LastIndexOf('\\');
-                string folderPath = slash <= 0 ? "\\" : normalized.Substring(0, slash);
-                string name = normalized.Substring(slash + 1);
-                Type serviceType = Type.GetTypeFromProgID("Schedule.Service");
-                if (serviceType == null) return false;
-                dynamic service = Activator.CreateInstance(serviceType);
-                service.Connect();
-                dynamic folder = service.GetFolder(folderPath);
-                dynamic task = folder.GetTask(name);
-                enabled = Convert.ToBoolean(task.Enabled);
-                return true;
-            }
-            catch
-            {
-                return TryGetScheduledTaskEnabledFromXml(taskName, out enabled);
-            }
+            return WindowsTaskApi.TryGetEnabled(taskName, out enabled);
         }
 
         private static bool TryGetScheduledTaskEnabledFromXml(string taskName, out bool enabled)
@@ -2858,6 +3048,52 @@ namespace RogueCleanerV2
         public Func<bool> Exists;
         public Func<bool> Cleaned;
         public Func<bool> Restored;
+    }
+
+    internal static class PermissionRegression
+    {
+        private const string DeniedSubKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace";
+
+        public static List<string> Run()
+        {
+            List<string> failures = new List<string>();
+            try
+            {
+                RegistryHelper.TestOpenFailureInjector = delegate(ActionTarget target, bool writable)
+                {
+                    if (!writable && target != null && string.Equals(target.SubKey, DeniedSubKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new SecurityException("模拟受保护注册表拒绝读取。");
+                    }
+                    return null;
+                };
+
+                ScannerEngine engine = new ScannerEngine();
+                engine.ScanAll(null);
+                List<ScanWarning> scanWarnings = engine.Warnings;
+                if (!scanWarnings.Any(delegate(ScanWarning warning)
+                {
+                    return string.Equals(warning.ErrorType, typeof(SecurityException).FullName, StringComparison.Ordinal) &&
+                        warning.TechnicalLocation.IndexOf(DeniedSubKey, StringComparison.OrdinalIgnoreCase) >= 0;
+                }))
+                {
+                    failures.Add("注入 SecurityException 后没有生成对应的跳过警告。");
+                }
+            }
+            catch (AggregateException ex)
+            {
+                failures.Add("权限异常仍被 Parallel.Invoke 包装并终止整次扫描：" + ex);
+            }
+            catch (Exception ex)
+            {
+                failures.Add("权限回归验证异常：" + ex);
+            }
+            finally
+            {
+                RegistryHelper.TestOpenFailureInjector = null;
+            }
+            return failures;
+        }
     }
 
     internal static class ValidationRunner
@@ -3157,7 +3393,7 @@ namespace RogueCleanerV2
             DeleteRegistryValue(@"Software\Microsoft\Windows\CurrentVersion\RunOnce", "CodexRogueCleanerTest_ThunderStart");
             DeleteRegistryValue(@"Software\Classes\.png\OpenWithProgids", "CodexRogueCleanerTest.BaiduNetdiskImageViewer.open");
             try { File.Delete(UninstallerMarkerPath()); } catch { }
-            RunProcess("schtasks.exe", "/Delete /TN \"" + TaskName + "\" /F");
+            WindowsTaskApi.Delete(TaskName);
             WaitUntil(delegate { bool enabled; return !TryGetScheduledTaskEnabled(TaskName, out enabled); }, 5000);
             if (includeService)
             {
@@ -3316,10 +3552,8 @@ namespace RogueCleanerV2
 
         private static void CreateScheduledTask()
         {
-            string time = DateTime.Now.AddMinutes(10).ToString("HH:mm");
             string executable = CreateValidationExecutable("360Safe", "360SafeTask.exe");
-            int exitCode = RunProcess("schtasks.exe", "/Create /SC DAILY /ST " + time + " /TN \"" + TaskName + "\" /TR \"" + executable + "\" /F");
-            if (exitCode != 0) throw new InvalidOperationException("schtasks 创建失败，退出码 " + exitCode);
+            if (!WindowsTaskApi.CreateValidationTask(TaskName, executable)) throw new InvalidOperationException("任务计划 COM 创建失败。");
             WaitUntil(delegate
             {
                 bool enabled;
@@ -3371,10 +3605,7 @@ namespace RogueCleanerV2
             {
                 using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name,StartMode FROM Win32_Service WHERE Name='" + serviceName.Replace("'", "''") + "'"))
                 {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        return Convert.ToString(obj["StartMode"]);
-                    }
+                    foreach (ManagementObject obj in searcher.Get()) return Convert.ToString(obj["StartMode"]);
                 }
             }
             catch { }
@@ -3383,34 +3614,7 @@ namespace RogueCleanerV2
 
         private static bool TryGetScheduledTaskEnabled(string taskName, out bool enabled)
         {
-            enabled = false;
-            try
-            {
-                string normalized = taskName.StartsWith("\\", StringComparison.Ordinal) ? taskName : "\\" + taskName;
-                int slash = normalized.LastIndexOf('\\');
-                string folderPath = slash <= 0 ? "\\" : normalized.Substring(0, slash);
-                string name = normalized.Substring(slash + 1);
-                Type serviceType = Type.GetTypeFromProgID("Schedule.Service");
-                if (serviceType == null) return false;
-                dynamic service = Activator.CreateInstance(serviceType);
-                service.Connect();
-                dynamic folder = service.GetFolder(folderPath);
-                dynamic task = folder.GetTask(name);
-                enabled = Convert.ToBoolean(task.Enabled);
-                return true;
-            }
-            catch
-            {
-                string xml = RunProcessWithOutput("schtasks.exe", "/Query /TN \"" + taskName + "\" /XML");
-                if (string.IsNullOrWhiteSpace(xml) || xml.IndexOf("<Task", StringComparison.OrdinalIgnoreCase) < 0) return false;
-                if (xml.IndexOf("<Enabled>false</Enabled>", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    enabled = false;
-                    return true;
-                }
-                enabled = true;
-                return true;
-            }
+            return WindowsTaskApi.TryGetEnabled(taskName, out enabled);
         }
 
         private static string RunProcessWithOutput(string file, string args)
@@ -3472,7 +3676,12 @@ namespace RogueCleanerV2
         private readonly Label summaryLabel = new Label();
         private readonly Label statusLabel = new Label();
         private readonly Label versionLabel = new Label();
-        private readonly LinkLabel authorLink = new LinkLabel();
+        private readonly Label authorLabel = new Label();
+        private readonly LinkLabel author52PojieLink = new LinkLabel();
+        private readonly LinkLabel authorGitHubLink = new LinkLabel();
+        private readonly ToolTip authorLinkToolTip = new ToolTip();
+        private readonly Dictionary<string, long> authorLinkLastOpened = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        private readonly Action<string> externalUrlLauncher;
         private readonly ProgressBar progress = new ProgressBar();
         private readonly Button scanButton = new Button();
         private readonly Button cleanButton = new Button();
@@ -3483,6 +3692,7 @@ namespace RogueCleanerV2
         private readonly Button updateButton = new Button();
         private readonly Button adminButton = new Button();
         private readonly Button feedbackButton = new Button();
+        private readonly Button aboutButton = new Button();
         private readonly Button overviewNavButton = new Button();
         private readonly Button startupNavButton = new Button();
         private readonly Button contextNavButton = new Button();
@@ -3508,13 +3718,19 @@ namespace RogueCleanerV2
         private string activeCategoryFilter = "总览";
 
         public MainForm(DataStore store)
-            : this(store, true)
+            : this(store, true, null)
         {
         }
 
         internal MainForm(DataStore store, bool checkUpdates)
+            : this(store, checkUpdates, null)
+        {
+        }
+
+        internal MainForm(DataStore store, bool checkUpdates, Action<string> externalUrlLauncher)
         {
             this.store = store;
+            this.externalUrlLauncher = externalUrlLauncher ?? LaunchExternalUrl;
             BuildUi();
             if (checkUpdates) UpdateChecker.CheckOnStartup(store, this);
         }
@@ -3578,10 +3794,12 @@ namespace RogueCleanerV2
             headerActions.Margin = new Padding(0);
             UiTheme.HeaderButton(adminButton, AdminUtil.IsAdministrator() ? "已是管理员" : "管理员重启");
             UiTheme.HeaderButton(feedbackButton, "反馈");
+            UiTheme.HeaderButton(aboutButton, "关于");
             UiTheme.HeaderButton(updateButton, "检查更新");
-            adminButton.Margin = feedbackButton.Margin = updateButton.Margin = new Padding(4, 4, 0, 0);
+            adminButton.Margin = feedbackButton.Margin = aboutButton.Margin = updateButton.Margin = new Padding(4, 4, 0, 0);
             headerActions.Controls.Add(adminButton);
             headerActions.Controls.Add(feedbackButton);
+            headerActions.Controls.Add(aboutButton);
             headerActions.Controls.Add(updateButton);
             header.Controls.Add(headerActions, 1, 0);
             adminButton.Enabled = !AdminUtil.IsAdministrator();
@@ -3728,8 +3946,10 @@ namespace RogueCleanerV2
             footer.BackColor = Color.FromArgb(238, 242, 247);
             footer.ColumnCount = 2;
             footer.RowCount = 1;
+            footer.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
+            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 400));
             root.Controls.Add(footer, 0, 3);
             statusLabel.Dock = DockStyle.Fill;
             statusLabel.TextAlign = ContentAlignment.MiddleLeft;
@@ -3737,14 +3957,32 @@ namespace RogueCleanerV2
             statusLabel.ForeColor = UiTheme.Muted;
             statusLabel.Text = "就绪。数据目录：" + store.Root;
             footer.Controls.Add(statusLabel, 0, 0);
-            authorLink.Dock = DockStyle.Fill;
-            authorLink.Text = "作者: " + AppMeta.AuthorName;
-            authorLink.TextAlign = ContentAlignment.MiddleRight;
-            authorLink.Padding = new Padding(0, 0, 14, 0);
-            authorLink.LinkColor = UiTheme.Info;
-            authorLink.ActiveLinkColor = Color.FromArgb(29, 78, 216);
-            authorLink.VisitedLinkColor = UiTheme.Info;
-            footer.Controls.Add(authorLink, 1, 0);
+
+            TableLayoutPanel authorArea = new TableLayoutPanel();
+            authorArea.Dock = DockStyle.Fill;
+            authorArea.ColumnCount = 3;
+            authorArea.RowCount = 1;
+            authorArea.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
+            authorArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            authorArea.Margin = new Padding(0);
+            authorArea.Padding = new Padding(0, 2, 10, 2);
+            authorArea.BackColor = footer.BackColor;
+            authorArea.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            authorArea.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
+            authorArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            authorLabel.Dock = DockStyle.Fill;
+            authorLabel.AutoSize = false;
+            authorLabel.Text = "作者：" + AppMeta.AuthorName;
+            authorLabel.TextAlign = ContentAlignment.MiddleRight;
+            authorLabel.ForeColor = UiTheme.Muted;
+            authorLabel.AutoEllipsis = true;
+            authorLabel.Cursor = Cursors.Default;
+            ConfigureAuthorDestination(author52PojieLink, "吾爱破解", "RogueCleanerV2.Assets.52PojieFavicon", "打开作者的吾爱破解主页");
+            ConfigureAuthorDestination(authorGitHubLink, "GitHub", "RogueCleanerV2.Assets.GitHubFavicon", "打开作者的 GitHub 主页");
+            authorArea.Controls.Add(authorLabel, 0, 0);
+            authorArea.Controls.Add(author52PojieLink, 1, 0);
+            authorArea.Controls.Add(authorGitHubLink, 2, 0);
+            footer.Controls.Add(authorArea, 1, 0);
 
             scanButton.Click += delegate { StartScan(); };
             cleanButton.Click += delegate { StartClean(); };
@@ -3755,6 +3993,7 @@ namespace RogueCleanerV2
             updateButton.Click += delegate { UpdateChecker.CheckNow(store, this, true); };
             adminButton.Click += delegate { AdminUtil.RelaunchAsAdmin(); };
             feedbackButton.Click += delegate { ShowFeedbackForCurrentRow(); };
+            aboutButton.Click += delegate { using (AboutForm form = new AboutForm()) form.ShowDialog(this); };
             searchBox.TextChanged += delegate { ApplyFilter(); };
             rows.ListChanged += delegate { UpdateSummary(); };
             grid.DataError += GridDataError;
@@ -3763,7 +4002,8 @@ namespace RogueCleanerV2
             grid.CellClick += GridCellClick;
             grid.SelectionChanged += delegate { feedbackButton.Enabled = !isBusy; UpdateDetails(); };
             grid.KeyDown += GridKeyDown;
-            authorLink.LinkClicked += delegate { OpenAuthorLinks(); };
+            author52PojieLink.Click += delegate { OpenAuthorDestination(AppMeta.Author52PojieUrl); };
+            authorGitHubLink.Click += delegate { OpenAuthorDestination(AppMeta.AuthorGitHubUrl); };
             copyDetailButton.Click += delegate { CopyCurrentDetails(); };
             Shown += delegate
             {
@@ -3799,7 +4039,11 @@ namespace RogueCleanerV2
             SetNavigation("总览");
             overviewNavButton.Click += delegate { SetNavigation("总览"); };
             startupNavButton.Click += delegate { SetNavigation("启动项"); };
-            contextNavButton.Click += delegate { SetNavigation("右键"); };
+            contextNavButton.Click += delegate
+            {
+                SetNavigation("右键");
+                using (ContextMenuManagerForm form = new ContextMenuManagerForm(store)) form.ShowDialog(this);
+            };
             diagnoseNavButton.Click += delegate { SetNavigation("诊断"); };
             recoveryNavButton.Click += delegate { new RecoveryCenterForm(store).ShowDialog(this); };
             return nav;
@@ -4061,14 +4305,80 @@ namespace RogueCleanerV2
             return builder.ToString().TrimEnd();
         }
 
-        private static void OpenAuthorLinks()
+        private void ConfigureAuthorDestination(LinkLabel link, string text, string resourceName, string toolTip)
+        {
+            link.Dock = DockStyle.Fill;
+            link.AutoSize = false;
+            link.Text = text;
+            link.TextAlign = ContentAlignment.MiddleCenter;
+            link.ImageAlign = ContentAlignment.MiddleLeft;
+            link.Padding = new Padding(26, 0, 6, 0);
+            link.Margin = new Padding(4, 0, 0, 0);
+            link.LinkColor = UiTheme.Info;
+            link.ActiveLinkColor = Color.FromArgb(29, 78, 216);
+            link.VisitedLinkColor = UiTheme.Info;
+            link.LinkBehavior = LinkBehavior.HoverUnderline;
+            link.Cursor = Cursors.Hand;
+            link.AutoEllipsis = true;
+            link.Image = LoadEmbeddedAuthorIcon(resourceName);
+            authorLinkToolTip.SetToolTip(link, toolTip);
+        }
+
+        private static Image LoadEmbeddedAuthorIcon(string resourceName)
         {
             try
             {
-                Process.Start(new ProcessStartInfo { FileName = AppMeta.Author52PojieUrl, UseShellExecute = true });
-                Process.Start(new ProcessStartInfo { FileName = AppMeta.AuthorGitHubUrl, UseShellExecute = true });
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
+                {
+                    if (stream == null) return null;
+                    try
+                    {
+                        using (Icon icon = new Icon(stream, new Size(20, 20))) return icon.ToBitmap();
+                    }
+                    catch
+                    {
+                        stream.Position = 0;
+                        using (Image image = Image.FromStream(stream)) return new Bitmap(image, new Size(20, 20));
+                    }
+                }
             }
-            catch { }
+            catch { return null; }
+        }
+
+        private void OpenAuthorDestination(string url)
+        {
+            long now = Stopwatch.GetTimestamp();
+            long previous;
+            if (authorLinkLastOpened.TryGetValue(url, out previous))
+            {
+                double elapsedMilliseconds = (now - previous) * 1000D / Stopwatch.Frequency;
+                if (elapsedMilliseconds < 800D) return;
+            }
+            authorLinkLastOpened[url] = now;
+            try
+            {
+                externalUrlLauncher(url);
+            }
+            catch
+            {
+                authorLinkLastOpened.Remove(url);
+            }
+        }
+
+        private static void LaunchExternalUrl(string url)
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                authorLinkToolTip.Dispose();
+                if (author52PojieLink.Image != null) author52PojieLink.Image.Dispose();
+                if (authorGitHubLink.Image != null) authorGitHubLink.Image.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         private int GridRowHeight()
@@ -4093,12 +4403,14 @@ namespace RogueCleanerV2
                 {
                     ScannerEngine engine = new ScannerEngine();
                     List<Finding> result = engine.ScanAll(this);
+                    List<ScanWarning> scanWarnings = engine.Warnings;
                     BeginInvoke((MethodInvoker)delegate
                     {
                         scanWatch.Stop();
                         ReplaceRows(result);
-                        latestEvidenceReportPath = CleanupEngineWriteScanReport(result);
-                        SetBusy(false, "扫描完成，用时 " + scanWatch.Elapsed.TotalSeconds.ToString("0.0") + " 秒。发现 " + result.Count + " 项。证据报告：" + Path.GetFileName(latestEvidenceReportPath));
+                        latestEvidenceReportPath = CleanupEngineWriteScanReport(result, scanWarnings);
+                        string warningText = scanWarnings.Count == 0 ? string.Empty : "；另有 " + scanWarnings.Count + " 个受保护位置无法读取";
+                        SetBusy(false, "扫描完成，用时 " + scanWatch.Elapsed.TotalSeconds.ToString("0.0") + " 秒。发现 " + result.Count + " 项" + warningText + "。证据报告：" + Path.GetFileName(latestEvidenceReportPath));
                     });
                 }
                 catch (Exception ex)
@@ -4156,13 +4468,15 @@ namespace RogueCleanerV2
                     CleanupBatch batch = cleaner.Clean(selected);
                     ScannerEngine scanner = new ScannerEngine();
                     List<Finding> refreshed = scanner.ScanAll(null);
+                    List<ScanWarning> scanWarnings = scanner.Warnings;
                     BeginInvoke((MethodInvoker)delegate
                     {
                         rows.Clear();
                         foreach (Finding finding in refreshed) rows.Add(finding);
                         int failed = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
                         int launched = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
-                        SetBusy(false, failed > 0 ? "处理后复核发现残留：" + failed + " 项。" : "处理完成，已自动复扫。");
+                        string warningText = scanWarnings.Count == 0 ? string.Empty : "；" + scanWarnings.Count + " 个受保护位置未读取";
+                        SetBusy(false, failed > 0 ? "处理后复核发现残留：" + failed + " 项" + warningText + "。" : "处理完成，已自动复扫" + warningText + "。");
                         MessageBox.Show("成功清理：" + batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Done"; }) + " 项\n已弹出卸载器：" + launched + " 项\n失败/残留：" + failed + " 项\n跳过：" + batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Skipped"; }) + " 项\n\n备份目录：" + batch.Path, failed > 0 ? "处理后仍有残留" : "处理完成", MessageBoxButtons.OK, failed > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
                     });
                 }
@@ -4378,10 +4692,18 @@ namespace RogueCleanerV2
             }
         }
 
-        private string CleanupEngineWriteScanReport(List<Finding> findings)
+        private string CleanupEngineWriteScanReport(List<Finding> findings, List<ScanWarning> scanWarnings)
         {
             string path = Path.Combine(store.Reports, "scan-" + store.Timestamp() + ".json");
-            CleanerEngine.WriteJson(path, findings);
+            CleanerEngine.WriteJson(path, new ScanEvidenceReport
+            {
+                ScannedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                ProductVersion = AppMeta.Version,
+                FindingCount = findings == null ? 0 : findings.Count,
+                WarningCount = scanWarnings == null ? 0 : scanWarnings.Count,
+                Findings = findings ?? new List<Finding>(),
+                Warnings = scanWarnings ?? new List<ScanWarning>()
+            });
             return path;
         }
 

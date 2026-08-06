@@ -11,6 +11,8 @@ $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSComman
 $v2Src = Join-Path $root 'src\v2'
 $manifest = Join-Path $root 'src\app.manifest'
 $icon = Join-Path $root 'src\app.ico'
+$author52PojieIcon = Join-Path $root 'src\v2\assets\52pojie-favicon.ico'
+$authorGitHubIcon = Join-Path $root 'src\v2\assets\github-favicon.ico'
 $obj = Join-Path $root 'obj'
 $exe = Join-Path $root '流氓软件克星.exe'
 $dist = Join-Path $root 'dist\流氓软件克星'
@@ -43,6 +45,11 @@ if (!$PackageOnly) {
     if (!(Test-Path -LiteralPath $icon -PathType Leaf)) {
         throw "缺少图标文件：$icon"
     }
+    foreach ($embeddedIcon in @($author52PojieIcon, $authorGitHubIcon)) {
+        if (!(Test-Path -LiteralPath $embeddedIcon -PathType Leaf)) {
+            throw "缺少作者主页图标资源：$embeddedIcon"
+        }
+    }
 
     $cscArgs = @(
         '/nologo',
@@ -50,6 +57,8 @@ if (!$PackageOnly) {
         '/platform:anycpu',
         "/win32manifest:$manifest",
         "/win32icon:$icon",
+        "/resource:$author52PojieIcon,RogueCleanerV2.Assets.52PojieFavicon",
+        "/resource:$authorGitHubIcon,RogueCleanerV2.Assets.GitHubFavicon",
         '/reference:System.Windows.Forms.dll',
         '/reference:System.Drawing.dll',
         '/reference:System.Web.Extensions.dll',

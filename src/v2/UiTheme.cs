@@ -159,6 +159,7 @@ namespace RogueCleanerV2
                 Capture(main, Path.Combine(store.Reports, "ui-main-minimum-" + store.Timestamp() + ".png"), failures);
                 main.Close();
             }
+            ValidateAuthorDestinations(store, failures);
             foreach (float scale in new float[] { 1.25F, 1.5F, 2F }) ValidateScaledWindow(store, scale, failures);
             ValidateLiveScan(store, failures);
 
@@ -181,6 +182,83 @@ namespace RogueCleanerV2
                 ValidateVisibleButton(feedback, failures, "仅保存本地", "feedback");
                 Capture(feedback, Path.Combine(store.Reports, "ui-feedback-" + store.Timestamp() + ".png"), failures);
                 feedback.Close();
+            }
+            using (RecoveryCenterForm recovery = new RecoveryCenterForm(store))
+            {
+                recovery.Show();
+                Application.DoEvents();
+                ValidateVisibleButton(recovery, failures, "恢复选中批次", "recovery");
+                ValidateVisibleButton(recovery, failures, "关闭", "recovery");
+                Capture(recovery, Path.Combine(store.Reports, "ui-recovery-" + store.Timestamp() + ".png"), failures);
+                recovery.Close();
+            }
+            using (ContextMenuManagerForm contextMenu = new ContextMenuManagerForm(store))
+            {
+                contextMenu.Show();
+                Application.DoEvents();
+                if (contextMenu.Cursor != Cursors.Default || contextMenu.UseWaitCursor) failures.Add("context menu：枚举期间出现等待光标");
+                Button refresh = FindButton(contextMenu, "刷新");
+                Stopwatch watch = Stopwatch.StartNew();
+                while (refresh != null && !refresh.Enabled && watch.ElapsedMilliseconds < 15000)
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(15);
+                }
+                ValidateVisibleButton(contextMenu, failures, "刷新", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "启用", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "禁用", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "编辑", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "添加", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "删除", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "专用模块", "context menu");
+                ValidateVisibleButton(contextMenu, failures, "高级兼容", "context menu");
+                if (refresh != null && !refresh.Enabled) failures.Add("context menu：15 秒内未完成枚举");
+                SplitContainer contextSplit = FindControl<SplitContainer>(contextMenu);
+                if (contextSplit == null || contextSplit.Panel2.Width < 280) failures.Add("context menu：右侧详情面板未保留足够宽度");
+                Capture(contextMenu, Path.Combine(store.Reports, "ui-context-menu-" + store.Timestamp() + ".png"), failures);
+                contextMenu.Close();
+            }
+            using (SpecialContextMenuForm special = new SpecialContextMenuForm(store))
+            {
+                special.Show(); Application.DoEvents();
+                if (special.Cursor != Cursors.Default || special.UseWaitCursor) failures.Add("special menu：枚举期间出现等待光标");
+                Button refresh = FindButton(special, "刷新");
+                Stopwatch watch = Stopwatch.StartNew();
+                while (refresh != null && !refresh.Enabled && watch.ElapsedMilliseconds < 15000) { Application.DoEvents(); Thread.Sleep(15); }
+                ValidateVisibleButton(special, failures, "刷新", "special menu");
+                ValidateVisibleButton(special, failures, "启用", "special menu");
+                ValidateVisibleButton(special, failures, "禁用", "special menu");
+                ValidateVisibleButton(special, failures, "添加", "special menu");
+                ValidateVisibleButton(special, failures, "删除", "special menu");
+                if (refresh != null && !refresh.Enabled) failures.Add("special menu：15 秒内未完成枚举");
+                Capture(special, Path.Combine(store.Reports, "ui-special-menu-" + store.Timestamp() + ".png"), failures);
+                special.Close();
+            }
+            using (AdvancedContextMenuForm advanced = new AdvancedContextMenuForm(store))
+            {
+                advanced.Show(); Application.DoEvents();
+                if (advanced.Cursor != Cursors.Default || advanced.UseWaitCursor) failures.Add("advanced menu：枚举期间出现等待光标");
+                Button refresh = FindButton(advanced, "刷新");
+                Stopwatch watch = Stopwatch.StartNew();
+                while (refresh != null && !refresh.Enabled && watch.ElapsedMilliseconds < 15000) { Application.DoEvents(); Thread.Sleep(15); }
+                ValidateVisibleButton(advanced, failures, "刷新", "advanced menu");
+                ValidateVisibleButton(advanced, failures, "启用 / 安装", "advanced menu");
+                ValidateVisibleButton(advanced, failures, "禁用 / 移除", "advanced menu");
+                ValidateVisibleButton(advanced, failures, "添加 IE 项", "advanced menu");
+                ValidateVisibleButton(advanced, failures, "上移", "advanced menu");
+                ValidateVisibleButton(advanced, failures, "下移", "advanced menu");
+                if (refresh != null && !refresh.Enabled) failures.Add("advanced menu：15 秒内未完成枚举");
+                Capture(advanced, Path.Combine(store.Reports, "ui-advanced-menu-" + store.Timestamp() + ".png"), failures);
+                advanced.Close();
+            }
+            using (ContextMenuEditorForm editor = new ContextMenuEditorForm())
+            {
+                editor.Show();
+                Application.DoEvents();
+                ValidateVisibleButton(editor, failures, "添加", "context editor");
+                ValidateVisibleButton(editor, failures, "取消", "context editor");
+                Capture(editor, Path.Combine(store.Reports, "ui-context-editor-" + store.Timestamp() + ".png"), failures);
+                editor.Close();
             }
             return failures;
         }
@@ -247,7 +325,67 @@ namespace RogueCleanerV2
                 if (feedbackBounds.IntersectsWith(updateBounds)) failures.Add(scope + "：检查更新与反馈发生重叠");
             }
             if (scan != null && clean != null && RelativeBounds(form, scan).IntersectsWith(RelativeBounds(form, clean))) failures.Add(scope + "：开始扫描与清理勾选发生重叠");
+            ValidateAuthorLayout(form, failures, scope);
             if (scope == "default") ValidateBusyCursor(form, failures);
+        }
+
+        private static void ValidateAuthorLayout(Form form, List<string> failures, string scope)
+        {
+            Label author = FindControlByText<Label>(form, "作者：" + AppMeta.AuthorName);
+            LinkLabel poJie = FindControlByText<LinkLabel>(form, "吾爱破解");
+            LinkLabel gitHub = FindControlByText<LinkLabel>(form, "GitHub");
+            if (author == null)
+            {
+                failures.Add(scope + "：缺少普通作者署名");
+            }
+            else
+            {
+                if (author is LinkLabel) failures.Add(scope + "：作者署名仍是可点击链接");
+                ValidateControlBounds(form, author, failures, "作者署名", scope);
+            }
+            LinkLabel[] links = new LinkLabel[] { poJie, gitHub };
+            string[] names = new string[] { "吾爱破解", "GitHub" };
+            for (int index = 0; index < links.Length; index++)
+            {
+                LinkLabel link = links[index];
+                string name = names[index];
+                if (link == null)
+                {
+                    failures.Add(scope + "：缺少入口 " + name);
+                    continue;
+                }
+                ValidateControlBounds(form, link, failures, name, scope);
+                if (link.Image == null) failures.Add(scope + "：入口缺少嵌入图标 " + name);
+            }
+            if (poJie != null && gitHub != null && RelativeBounds(form, poJie).IntersectsWith(RelativeBounds(form, gitHub))) failures.Add(scope + "：吾爱破解与 GitHub 入口重叠");
+        }
+
+        private static void ValidateAuthorDestinations(DataStore store, List<string> failures)
+        {
+            List<string> opened = new List<string>();
+            using (MainForm form = new MainForm(store, false, delegate(string url) { opened.Add(url); }))
+            {
+                Label author = FindControlByText<Label>(form, "作者：" + AppMeta.AuthorName);
+                LinkLabel poJie = FindControlByText<LinkLabel>(form, "吾爱破解");
+                LinkLabel gitHub = FindControlByText<LinkLabel>(form, "GitHub");
+                MethodInfo onClick = typeof(Control).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (author == null || poJie == null || gitHub == null || onClick == null)
+                {
+                    failures.Add("author links：无法构造点击回归");
+                    return;
+                }
+                onClick.Invoke(author, new object[] { EventArgs.Empty });
+                onClick.Invoke(poJie, new object[] { EventArgs.Empty });
+                onClick.Invoke(poJie, new object[] { EventArgs.Empty });
+                onClick.Invoke(gitHub, new object[] { EventArgs.Empty });
+                if (opened.Count != 2)
+                {
+                    failures.Add("author links：作者/防连点回归启动次数=" + opened.Count);
+                    return;
+                }
+                if (!string.Equals(opened[0], AppMeta.Author52PojieUrl, StringComparison.Ordinal)) failures.Add("author links：吾爱入口目标错误 " + opened[0]);
+                if (!string.Equals(opened[1], AppMeta.AuthorGitHubUrl, StringComparison.Ordinal)) failures.Add("author links：GitHub 入口目标错误 " + opened[1]);
+            }
         }
 
         private static void ValidateBusyCursor(Form form, List<string> failures)
@@ -331,6 +469,13 @@ namespace RogueCleanerV2
             if (!formBounds.Contains(buttonBounds)) failures.Add(scope + "：按钮越出窗口 " + name + " form=" + formBounds + " button=" + buttonBounds);
         }
 
+        private static void ValidateControlBounds(Form form, Control control, List<string> failures, string name, string scope)
+        {
+            if ((form.Visible && !control.Visible) || control.Width <= 0 || control.Height <= 0) failures.Add(scope + "：控件不可见 " + name);
+            Rectangle bounds = RelativeBounds(form, control);
+            if (!form.ClientRectangle.Contains(bounds)) failures.Add(scope + "：控件越出窗口 " + name + " form=" + form.ClientRectangle + " control=" + bounds);
+        }
+
         private static Button FindButton(Control root, string text)
         {
             foreach (Control child in Descendants(root))
@@ -347,6 +492,16 @@ namespace RogueCleanerV2
             {
                 T control = child as T;
                 if (control != null) return control;
+            }
+            return null;
+        }
+
+        private static T FindControlByText<T>(Control root, string text) where T : Control
+        {
+            foreach (Control child in Descendants(root))
+            {
+                T control = child as T;
+                if (control != null && string.Equals(control.Text, text, StringComparison.Ordinal)) return control;
             }
             return null;
         }
@@ -376,7 +531,7 @@ namespace RogueCleanerV2
         {
             try
             {
-                using (Bitmap bitmap = new Bitmap(Math.Max(1, form.ClientSize.Width), Math.Max(1, form.ClientSize.Height)))
+                using (Bitmap bitmap = new Bitmap(Math.Max(1, form.Width), Math.Max(1, form.Height)))
                 {
                     form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
                     bitmap.Save(path, ImageFormat.Png);
