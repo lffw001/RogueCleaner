@@ -43,10 +43,85 @@ namespace RogueCleanerV2
         private static Image toggleOffImage;
         private static readonly ConditionalWeakTable<TextBox, TextBoxBorderRenderer> textBoxRenderers = new ConditionalWeakTable<TextBox, TextBoxBorderRenderer>();
         private static readonly ConditionalWeakTable<DataGridView, object> gridAlignmentWired = new ConditionalWeakTable<DataGridView, object>();
+        // WinForms stores layout sizes in physical pixels.  Dynamic layouts must therefore
+        // translate their logical design values at the current DPI instead of comparing a
+        // high-DPI client width directly to a 96-DPI breakpoint.
+        private static float regressionDpiScale;
 
         public static Font Font(float size, FontStyle style)
         {
             return new Font("Microsoft YaHei UI", size, style, GraphicsUnit.Point);
+        }
+
+        internal static int DpiPixels(Control control, int logicalPixels)
+        {
+            return Math.Max(1, (int)Math.Round(logicalPixels * GetDpiScale(control)));
+        }
+
+        internal static int LogicalPixels(Control control, int physicalPixels)
+        {
+            return Math.Max(1, (int)Math.Round(physicalPixels / GetDpiScale(control)));
+        }
+
+        internal static float GetDpiScale(Control control)
+        {
+            if (regressionDpiScale > 0F) return regressionDpiScale;
+            if (control == null || !control.IsHandleCreated) return 1F;
+            try
+            {
+                using (Graphics graphics = control.CreateGraphics())
+                {
+                    return Math.Max(1F, graphics.DpiX / 96F);
+                }
+            }
+            catch { return 1F; }
+        }
+
+        internal static IDisposable OverrideDpiScaleForRegression(float scale)
+        {
+            return new DpiScaleOverride(scale);
+        }
+
+        internal static int RequiredFlowLayoutHeight(FlowLayoutPanel panel)
+        {
+            if (panel == null) return 0;
+            int availableWidth = Math.Max(1, panel.ClientSize.Width - panel.Padding.Horizontal);
+            int usedWidth = 0;
+            int rowHeight = 0;
+            int totalHeight = panel.Padding.Vertical;
+            bool hasItems = false;
+            foreach (Control control in panel.Controls)
+            {
+                if (!control.Visible) continue;
+                int width = Math.Max(1, control.Width + control.Margin.Horizontal);
+                int height = Math.Max(1, control.Height + control.Margin.Vertical);
+                if (hasItems && usedWidth + width > availableWidth)
+                {
+                    totalHeight += rowHeight;
+                    usedWidth = 0;
+                    rowHeight = 0;
+                }
+                usedWidth += width;
+                rowHeight = Math.Max(rowHeight, height);
+                hasItems = true;
+            }
+            return hasItems ? totalHeight + rowHeight : panel.Padding.Vertical;
+        }
+
+        private sealed class DpiScaleOverride : IDisposable
+        {
+            private readonly float previous;
+
+            public DpiScaleOverride(float scale)
+            {
+                previous = regressionDpiScale;
+                regressionDpiScale = scale > 0F ? scale : 1F;
+            }
+
+            public void Dispose()
+            {
+                regressionDpiScale = previous;
+            }
         }
 
         public static void ApplyWindowIdentity(Form form)
@@ -1051,7 +1126,7 @@ namespace RogueCleanerV2
             }
             ValidateAuthorDestinations(store, failures);
             ValidateWheelRouting(failures);
-            foreach (float scale in new float[] { 1.25F, 1.5F, 2F }) ValidateScaledWindow(store, scale, failures);
+            foreach (float scale in new float[] { 1F, 1.25F, 1.5F, 2F }) ValidateScaledWindow(store, scale, failures);
             ValidateLiveScan(store, failures);
             ValidateResultRefreshPresentation(store, failures);
 
@@ -1075,6 +1150,7 @@ namespace RogueCleanerV2
                 Capture(feedback, Path.Combine(store.Reports, "ui-feedback-" + store.Timestamp() + ".png"), failures);
                 feedback.Close();
             }
+            ValidateDialogGeometry(store, sample, failures);
             using (RecoveryCenterForm recovery = new RecoveryCenterForm(store))
             {
                 recovery.Show();
@@ -1221,12 +1297,23 @@ namespace RogueCleanerV2
                 form.Show();
                 Application.DoEvents();
                 MethodInfo startScan = typeof(MainForm).GetMethod("StartScan", BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo setBusy = typeof(MainForm).GetMethod("SetBusy", BindingFlags.Instance | BindingFlags.NonPublic);
                 Button scan = FindButton(form, "开始扫描");
-                if (startScan == null || scan == null)
+                if (startScan == null || setBusy == null || scan == null)
                 {
                     failures.Add("live scan：无法启动真实界面扫描");
                     return;
                 }
+                setBusy.Invoke(form, new object[] { true, "回归：忙碌状态布局验证。" });
+                Application.DoEvents();
+                foreach (string actionText in new string[] { "开始扫描", "清理勾选", "勾选可清理", "只勾低风险", "恢复中心", "证据报告" })
+                    ValidateButton(form, FindButton(form, actionText), failures, actionText, "live scan busy");
+                ProgressBar busyProgress = FindControl<ProgressBar>(form);
+                if (busyProgress == null || !busyProgress.Visible) failures.Add("live scan busy：进度条未显示");
+                else ValidateControlBounds(form, busyProgress, failures, "进度条", "live scan busy");
+                Capture(form, Path.Combine(store.Reports, "ui-main-busy-" + store.Timestamp() + ".png"), failures);
+                setBusy.Invoke(form, new object[] { false, "回归：忙碌状态布局验证完成。" });
+                Application.DoEvents();
                 Stopwatch watch = Stopwatch.StartNew();
                 startScan.Invoke(form, new object[] { null });
                 if (form.Cursor != Cursors.Default || form.UseWaitCursor) failures.Add("live scan：扫描开始后出现等待光标");
@@ -1240,6 +1327,8 @@ namespace RogueCleanerV2
                 FieldInfo dataErrorField = typeof(MainForm).GetField("gridDataErrorCount", BindingFlags.Instance | BindingFlags.NonPublic);
                 int dataErrorCount = dataErrorField == null ? -1 : Convert.ToInt32(dataErrorField.GetValue(form));
                 if (dataErrorCount != 0) failures.Add("live scan：DataGridView.DataError 次数=" + dataErrorCount);
+                ValidateMainWindow(form, failures, "live scan complete");
+                Capture(form, Path.Combine(store.Reports, "ui-main-complete-" + store.Timestamp() + ".png"), failures);
                 form.Close();
             }
         }
@@ -1283,14 +1372,134 @@ namespace RogueCleanerV2
         {
             using (MainForm form = new MainForm(store, false))
             {
-                form.CreateControl();
-                form.ClientSize = new Size(1120, 700);
-                form.PerformLayout();
-                form.Scale(new SizeF(scale, scale));
-                form.ClientSize = new Size((int)(1120 * scale), (int)(700 * scale));
-                form.PerformLayout();
-                ValidateMainWindow(form, failures, "scale-" + scale.ToString("0.##"));
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(-2200, -2200);
+                form.Show();
+                Application.DoEvents();
+                float actualScale = UiTheme.GetDpiScale(form);
+                float relativeScale = scale / Math.Max(0.01F, actualScale);
+                // Establish the logical 900 x 500 baseline at the host DPI before
+                // applying the target ratio.  Resizing after Scale() mixes two
+                // coordinate systems and creates artificial dock/flow clipping.
+                form.ClientSize = new Size(
+                    (int)Math.Round(900F * actualScale),
+                    (int)Math.Round(500F * actualScale));
+                ForceLayout(form);
+                using (UiTheme.OverrideDpiScaleForRegression(scale))
+                {
+                    if (Math.Abs(relativeScale - 1F) > 0.001F)
+                    {
+                        ScaleFontsForRegression(form, relativeScale);
+                        form.Scale(new SizeF(relativeScale, relativeScale));
+                    }
+                    ForceLayout(form);
+                    Application.DoEvents();
+                    string scope = "geometry-" + (scale * 100F).ToString("0") + "pct";
+                    ValidateMainWindow(form, failures, scope);
+                    Capture(form, Path.Combine(store.Reports, "ui-main-" + scope + "-" + store.Timestamp() + ".png"), failures);
+                }
+                form.Close();
             }
+        }
+
+        // Scale() adjusts bounds but not point-sized fonts.  This deliberately models
+        // the geometry of each target DPI; it is not labelled as a physical-DPI test.
+        private static void ScaleFontsForRegression(Control root, float factor)
+        {
+            if (root == null || factor <= 0F) return;
+            // A child that inherits its parent Font has already changed when the
+            // parent is scaled.  Scaling it again makes a nested control grow by
+            // factor^n and turns the geometry harness itself into a false clipping
+            // source at 125%/150%/200%.
+            bool ownsFont = root.Parent == null || !object.ReferenceEquals(root.Font, root.Parent.Font);
+            if (ownsFont)
+            {
+                try
+                {
+                    Font font = root.Font;
+                    if (font != null) root.Font = new Font(font.FontFamily, Math.Max(1F, font.SizeInPoints * factor), font.Style, GraphicsUnit.Point);
+                }
+                catch { }
+            }
+            foreach (Control child in root.Controls) ScaleFontsForRegression(child, factor);
+        }
+
+        private static void ValidateDialogGeometry(DataStore store, Finding sample, List<string> failures)
+        {
+            foreach (float scale in new float[] { 1F, 1.25F, 1.5F, 2F })
+            {
+                ValidateFormGeometry(store, "feedback", delegate { return new FeedbackForm(store, sample); }, scale, failures);
+                ValidateFormGeometry(store, "context-menu", delegate { return new ContextMenuManagerForm(store); }, scale, failures);
+                ValidateFormGeometry(store, "special-menu", delegate { return new SpecialContextMenuForm(store); }, scale, failures);
+                ValidateFormGeometry(store, "advanced-menu", delegate { return new AdvancedContextMenuForm(store); }, scale, failures);
+                ValidateFormGeometry(store, "context-editor", delegate { return new ContextMenuEditorForm(); }, scale, failures);
+                ValidateFormGeometry(store, "special-add", delegate { return new SpecialMenuAddForm("ShellNew 新建菜单"); }, scale, failures);
+                ValidateFormGeometry(store, "ie-editor", delegate { return new IeMenuEditorForm(null); }, scale, failures);
+                ValidateFormGeometry(store, "about", delegate { return new AboutForm(); }, scale, failures);
+                ValidateFormGeometry(store, "recovery", delegate { return new RecoveryCenterForm(store); }, scale, failures);
+            }
+        }
+
+        private static void ValidateFormGeometry(DataStore store, string name, Func<Form> create, float scale, List<string> failures)
+        {
+            using (Form form = create())
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(-2200, -2200);
+                form.Show();
+                Application.DoEvents();
+                float actualScale = UiTheme.GetDpiScale(form);
+                bool usesMinimumSize = form.MinimumSize.Width > 0 && form.MinimumSize.Height > 0;
+                Size baseSize = usesMinimumSize ? form.MinimumSize : form.ClientSize;
+                int logicalWidth = Math.Max(1, (int)Math.Round(baseSize.Width / Math.Max(0.01F, actualScale)));
+                int logicalHeight = Math.Max(1, (int)Math.Round(baseSize.Height / Math.Max(0.01F, actualScale)));
+                float relativeScale = scale / Math.Max(0.01F, actualScale);
+                using (UiTheme.OverrideDpiScaleForRegression(scale))
+                {
+                    // Set the pre-scale outer size first.  Scaling a fully laid-out
+                    // form and then shrinking it to the target size leaves docked
+                    // children at their old scaled bounds, which is a test artifact
+                    // rather than a DPI layout failure.
+                    Size baselineSize = new Size(
+                        Math.Max(1, (int)Math.Round(logicalWidth * actualScale)),
+                        Math.Max(1, (int)Math.Round(logicalHeight * actualScale)));
+                    if (usesMinimumSize) form.Size = baselineSize;
+                    else form.ClientSize = baselineSize;
+                    ForceLayout(form);
+                    if (Math.Abs(relativeScale - 1F) > 0.001F)
+                    {
+                        ScaleFontsForRegression(form, relativeScale);
+                        form.Scale(new SizeF(relativeScale, relativeScale));
+                    }
+                    ForceLayout(form);
+                    MethodInfo responsiveLayout = form.GetType().GetMethod("ApplyResponsiveLayout", BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (responsiveLayout != null) responsiveLayout.Invoke(form, null);
+                    ForceLayout(form);
+                    Application.DoEvents();
+                    string scope = "geometry-" + (scale * 100F).ToString("0") + "pct-" + name;
+                    foreach (Button button in Descendants(form).OfType<Button>()) ValidateButton(form, button, failures, button.Text, scope);
+                    foreach (RadioButton option in Descendants(form).OfType<RadioButton>())
+                    {
+                        ValidateControlBounds(form, option, failures, option.Text, scope);
+                        ValidateParentClipping(form, option, failures, option.Text, scope);
+                        Size textSize = TextRenderer.MeasureText(option.Text ?? string.Empty, option.Font, option.ClientSize, TextFormatFlags.WordBreak);
+                        if (textSize.Height + option.Padding.Vertical > option.ClientSize.Height) failures.Add(scope + "：选项文字被裁切 " + option.Text.Replace(Environment.NewLine, " / "));
+                    }
+                    foreach (FlowLayoutPanel flow in Descendants(form).OfType<FlowLayoutPanel>())
+                    {
+                        if (flow.AutoScroll && flow.Controls.OfType<ButtonBase>().Any()) failures.Add(scope + "：操作栏仍启用滚动，可能隐藏主操作");
+                    }
+                    Capture(form, Path.Combine(store.Reports, "ui-" + scope + "-" + store.Timestamp() + ".png"), failures);
+                }
+            }
+        }
+
+        private static void ForceLayout(Control root)
+        {
+            if (root == null || root.IsDisposed) return;
+            root.PerformLayout();
+            foreach (Control child in root.Controls) ForceLayout(child);
+            root.PerformLayout();
         }
 
         private static void ValidateMainWindow(Form form, List<string> failures, string scope)
@@ -1311,7 +1520,11 @@ namespace RogueCleanerV2
             {
                 Button action = FindButton(form, actionText);
                 if (action == null) failures.Add(scope + "：缺少顶部操作按钮“" + actionText + "”");
-                else if (action.Width < 128 || action.Height < 40) failures.Add(scope + "：顶部操作按钮“" + actionText + "”尺寸不足，可能截断文字");
+                else
+                {
+                    ValidateButton(form, action, failures, actionText, scope);
+                    if (action.Width < UiTheme.DpiPixels(form, 128) || action.Height < UiTheme.DpiPixels(form, 40)) failures.Add(scope + "：顶部操作按钮“" + actionText + "”尺寸不足，可能截断文字");
+                }
             }
             if (update != null && feedback != null)
             {
@@ -1322,8 +1535,35 @@ namespace RogueCleanerV2
             }
             if (scan != null && clean != null && RelativeBounds(form, scan).IntersectsWith(RelativeBounds(form, clean))) failures.Add(scope + "：开始扫描与清理勾选发生重叠");
             ValidateAuthorLayout(form, failures, scope);
+            ValidateSummaryCards(form, failures, scope);
             ValidateCompactResultGrid(form, failures, scope);
             if (scope == "default") ValidateBusyCursor(form, failures);
+        }
+
+        private static void ValidateSummaryCards(Form form, List<string> failures, string scope)
+        {
+            string[] titles = new string[] { "发现项目", "建议处理", "可管理", "仅提示 / 未知" };
+            List<Label> cards = new List<Label>();
+            foreach (string title in titles)
+            {
+                Label label = FindControlByText<Label>(form, title);
+                if (label == null)
+                {
+                    failures.Add(scope + "：缺少统计卡 " + title);
+                    continue;
+                }
+                ValidateControlBounds(form, label, failures, "统计卡 " + title, scope);
+                ValidateTextFits(label, form, failures, "统计卡 " + title, scope);
+                cards.Add(label);
+            }
+            for (int left = 0; left < cards.Count; left++)
+            {
+                for (int right = left + 1; right < cards.Count; right++)
+                {
+                    if (RelativeBounds(form, cards[left]).IntersectsWith(RelativeBounds(form, cards[right])))
+                        failures.Add(scope + "：统计卡发生重叠 " + cards[left].Text + " / " + cards[right].Text);
+                }
+            }
         }
 
         private static void ValidateCompactResultGrid(Form form, List<string> failures, string scope)
@@ -1377,8 +1617,18 @@ namespace RogueCleanerV2
             else
             {
                 if (author is LinkLabel) failures.Add(scope + "：作者署名仍是可点击链接");
-                ValidateControlBounds(form, author, failures, "作者署名", scope);
             }
+            // At the compact 900-logical-pixel layout the footer intentionally
+            // collapses this non-primary author area as a whole.  Do not call that
+            // a clipped control; the destination behavior is covered separately.
+            bool authorAreaVisible = author != null && author.Visible;
+            if (!authorAreaVisible)
+            {
+                if ((poJie != null && poJie.Visible) || (gitHub != null && gitHub.Visible))
+                    failures.Add(scope + "：紧凑页脚没有完整折叠作者入口");
+                return;
+            }
+            ValidateControlBounds(form, author, failures, "作者署名", scope);
             LinkLabel[] links = new LinkLabel[] { poJie, gitHub };
             string[] names = new string[] { "吾爱破解", "GitHub" };
             for (int index = 0; index < links.Length; index++)
@@ -1498,7 +1748,7 @@ namespace RogueCleanerV2
             if (button == null) return;
             string expected = "ActionButton:" + role;
             if (!string.Equals(Convert.ToString(button.Tag), expected, StringComparison.Ordinal)) failures.Add(scope + "：按钮没有采用统一语义样式 " + text);
-            if (button.Height != 36) failures.Add(scope + "：按钮高度不符合统一规范 " + text + " height=" + button.Height);
+            if (button.Height != UiTheme.DpiPixels(form, 36)) failures.Add(scope + "：按钮高度不符合统一规范 " + text + " height=" + button.Height);
         }
 
         private static void ValidateModernScrollBar(Form form, List<string> failures, string scope, bool expectVisible)
@@ -1584,6 +1834,11 @@ namespace RogueCleanerV2
             Rectangle formBounds = form.ClientRectangle;
             Rectangle buttonBounds = RelativeBounds(form, button);
             if (!formBounds.Contains(buttonBounds)) failures.Add(scope + "：按钮越出窗口 " + name + " form=" + formBounds + " button=" + buttonBounds);
+            ValidateParentClipping(form, button, failures, name, scope);
+            Size textSize = TextRenderer.MeasureText(button.Text ?? string.Empty, button.Font);
+            int imageWidth = button.Image == null ? 0 : button.Image.Width + UiTheme.DpiPixels(form, 4);
+            if (textSize.Width + button.Padding.Horizontal + imageWidth > button.ClientSize.Width || textSize.Height + button.Padding.Vertical > button.ClientSize.Height)
+                failures.Add(scope + "：按钮文字或图标被裁切 " + name);
         }
 
         private static void ValidateControlBounds(Form form, Control control, List<string> failures, string name, string scope)
@@ -1591,6 +1846,41 @@ namespace RogueCleanerV2
             if ((form.Visible && !control.Visible) || control.Width <= 0 || control.Height <= 0) failures.Add(scope + "：控件不可见 " + name);
             Rectangle bounds = RelativeBounds(form, control);
             if (!form.ClientRectangle.Contains(bounds)) failures.Add(scope + "：控件越出窗口 " + name + " form=" + form.ClientRectangle + " control=" + bounds);
+        }
+
+        private static void ValidateParentClipping(Form form, Control control, List<string> failures, string name, string scope)
+        {
+            Control child = control;
+            while (child != null && child.Parent != null)
+            {
+                Control parent = child.Parent;
+                // Bounds are stored in the parent control's coordinate system.  Keep
+                // the check in that same system: RectangleToScreen mixes transforms
+                // after manual Scale() and falsely reports fully rendered toolbars.
+                Rectangle parentBounds = parent.ClientRectangle;
+                parentBounds.Inflate(1, 1); // WinForms border/layout rounding.
+                if (parent != form && !parentBounds.Contains(child.Bounds))
+                {
+                    failures.Add(scope + "：操作控件被父容器裁切 " + name + " parent=" + parent.GetType().Name);
+                    return;
+                }
+                FlowLayoutPanel flow = parent as FlowLayoutPanel;
+                if (flow != null && flow.AutoScroll)
+                {
+                    failures.Add(scope + "：主操作依赖滚动条才能完整显示 " + name);
+                    return;
+                }
+                if (parent == form) return;
+                child = parent;
+            }
+        }
+
+        private static void ValidateTextFits(Control control, Form form, List<string> failures, string name, string scope)
+        {
+            if (control == null || string.IsNullOrEmpty(control.Text)) return;
+            Size textSize = TextRenderer.MeasureText(control.Text, control.Font);
+            if (textSize.Width > control.ClientSize.Width || textSize.Height > control.ClientSize.Height)
+                failures.Add(scope + "：文字显示不全 " + name);
         }
 
         private static Button FindButton(Control root, string text)

@@ -857,9 +857,12 @@ namespace RogueCleanerV2
         private readonly Button refreshButton = new Button();
         private readonly Button specialButton = new Button();
         private readonly Button advancedButton = new Button();
+        private readonly TableLayoutPanel rootLayout = new TableLayoutPanel();
+        private readonly FlowLayoutPanel toolsLayout = new FlowLayoutPanel();
         private ContextMenuInventory inventory;
         private int presentationCandidateCount;
         private bool presentationUiComplete;
+        private bool applyingResponsiveLayout;
 
         internal bool FocusedPresentationComplete
         {
@@ -876,49 +879,47 @@ namespace RogueCleanerV2
             this.store = store;
             Text = "右键菜单管理";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(1080, 680);
-            Size = new Size(1280, 760);
+            // 900 x 500 logical pixels fits within a 1080p work area at 200%.
+            // The toolbar reflows below instead of hiding actions in a scroll bar.
+            MinimumSize = new Size(900, 500);
+            Size = new Size(1180, 720);
+            AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = UiTheme.Canvas;
             Font = UiTheme.Font(9F, FontStyle.Regular);
             UiTheme.ApplyWindowIdentity(this);
             BuildUi();
             Shown += delegate
             {
-                if (split.Width > 800)
-                {
-                    split.Panel1MinSize = 560;
-                    split.Panel2MinSize = 215;
-                    split.SplitterDistance = Math.Max(620, split.Width - 235);
-                }
+                ApplyResponsiveLayout();
                 RefreshInventory();
             };
         }
 
         private void BuildUi()
         {
-            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(16) };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            Controls.Add(root);
+            rootLayout.Dock = DockStyle.Fill; rootLayout.ColumnCount = 1; rootLayout.RowCount = 4; rootLayout.Padding = new Padding(16);
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            Controls.Add(rootLayout);
             TableLayoutPanel heading = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = new Padding(0), BackColor = UiTheme.PrimarySoft, Padding = new Padding(16, 8, 10, 8) };
             heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             heading.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); heading.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             heading.Controls.Add(new Label { Text = "右键菜单管理", Dock = DockStyle.Fill, Font = UiTheme.Font(17F, FontStyle.Bold), ForeColor = UiTheme.Text, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
             inventorySummary.Text = "正在读取右键菜单…"; inventorySummary.Dock = DockStyle.Fill; inventorySummary.ForeColor = UiTheme.Muted; inventorySummary.TextAlign = ContentAlignment.MiddleLeft;
             heading.Controls.Add(inventorySummary, 0, 1);
-            root.Controls.Add(heading, 0, 0);
+            rootLayout.Controls.Add(heading, 0, 0);
 
-            FlowLayoutPanel tools = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Margin = new Padding(0), Padding = new Padding(0, 7, 0, 7), BackColor = UiTheme.Canvas };
+            toolsLayout.Dock = DockStyle.Fill; toolsLayout.WrapContents = true; toolsLayout.AutoScroll = false; toolsLayout.Margin = new Padding(0); toolsLayout.Padding = new Padding(0, 7, 0, 7); toolsLayout.BackColor = UiTheme.Canvas;
             UiTheme.ActionButton(refreshButton, "刷新列表", ActionButtonRole.Primary);
             UiTheme.ActionButton(enableButton, "显示选中", ActionButtonRole.Standard); UiTheme.ActionButton(disableButton, "隐藏选中", ActionButtonRole.Warning);
             UiTheme.ActionButton(editButton, "修改名称", ActionButtonRole.Standard); UiTheme.ActionButton(addButton, "添加菜单", ActionButtonRole.Standard); UiTheme.ActionButton(deleteButton, "删除菜单", ActionButtonRole.Danger);
             UiTheme.ActionButton(specialButton, "更多位置", ActionButtonRole.Standard); UiTheme.ActionButton(advancedButton, "系统高级", ActionButtonRole.Standard);
             Button copy = new Button(); UiTheme.ActionButton(copy, "复制信息", ActionButtonRole.Standard);
             Button location = new Button(); UiTheme.ActionButton(location, "技术位置", ActionButtonRole.Standard);
-            tools.Controls.Add(refreshButton); tools.Controls.Add(enableButton); tools.Controls.Add(disableButton); tools.Controls.Add(editButton); tools.Controls.Add(addButton); tools.Controls.Add(deleteButton); tools.Controls.Add(copy); tools.Controls.Add(specialButton); tools.Controls.Add(advancedButton); tools.Controls.Add(location);
-            root.Controls.Add(tools, 0, 1);
+            toolsLayout.Controls.Add(refreshButton); toolsLayout.Controls.Add(enableButton); toolsLayout.Controls.Add(disableButton); toolsLayout.Controls.Add(editButton); toolsLayout.Controls.Add(addButton); toolsLayout.Controls.Add(deleteButton); toolsLayout.Controls.Add(copy); toolsLayout.Controls.Add(specialButton); toolsLayout.Controls.Add(advancedButton); toolsLayout.Controls.Add(location);
+            rootLayout.Controls.Add(toolsLayout, 0, 1);
             split.Dock = DockStyle.Fill; split.Orientation = Orientation.Vertical; split.SplitterDistance = 850; split.FixedPanel = FixedPanel.Panel2; split.SplitterWidth = 8;
             grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.BackgroundColor = UiTheme.Surface; grid.BorderStyle = BorderStyle.None; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             grid.RowTemplate.Height = 40;
@@ -939,9 +940,9 @@ namespace RogueCleanerV2
             CardPanel detailCard = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 10, 10), BackColor = UiTheme.Surface };
             Label detailTitle = new Label { Text = "项目详情", Dock = DockStyle.Top, Height = 32, Font = UiTheme.Font(11F, FontStyle.Bold), ForeColor = UiTheme.Primary, TextAlign = ContentAlignment.MiddleLeft };
             detailCard.Controls.Add(detailScroll); detailCard.Controls.Add(detailTitle);
-            split.Panel2.Padding = new Padding(4, 0, 0, 0); split.Panel2.Controls.Add(detailCard); root.Controls.Add(split, 0, 2);
+            split.Panel2.Padding = new Padding(4, 0, 0, 0); split.Panel2.Controls.Add(detailCard); rootLayout.Controls.Add(split, 0, 2);
             detailScroll.SizeChanged += delegate { ResizeDetailsContent(); };
-            status.Dock = DockStyle.Fill; status.TextAlign = ContentAlignment.MiddleLeft; status.ForeColor = UiTheme.Muted; status.Text = "正在准备枚举。"; root.Controls.Add(status, 0, 3);
+            status.Dock = DockStyle.Fill; status.TextAlign = ContentAlignment.MiddleLeft; status.ForeColor = UiTheme.Muted; status.Text = "正在准备枚举。"; rootLayout.Controls.Add(status, 0, 3);
             refreshButton.Click += delegate { RefreshInventory(); };
             grid.SelectionChanged += delegate { ShowDetails(); }; enableButton.Click += delegate { Toggle(true); }; disableButton.Click += delegate { Toggle(false); };
             grid.CellClick += delegate(object sender, DataGridViewCellEventArgs e) { if (e.RowIndex >= 0 && e.ColumnIndex == 1) { grid.CurrentCell = grid.Rows[e.RowIndex].Cells[e.ColumnIndex]; ContextMenuEntry item = Current(); if (item != null && !item.ReadOnly) Toggle(!item.Enabled); } };
@@ -950,6 +951,35 @@ namespace RogueCleanerV2
             advancedButton.Click += delegate { using (AdvancedContextMenuForm form = new AdvancedContextMenuForm(store)) form.ShowDialog(this); };
             copy.Click += delegate { if (!string.IsNullOrEmpty(details.Text)) Clipboard.SetText(details.Text); };
             location.Click += delegate { ContextMenuEntry entry = Current(); if (entry != null) { Clipboard.SetText(entry.TechnicalLocation); Process.Start("regedit.exe"); status.Text = "注册表位置已复制，并已打开注册表编辑器。"; } };
+            SizeChanged += delegate { ApplyResponsiveLayout(); };
+            toolsLayout.SizeChanged += delegate { ApplyResponsiveLayout(); };
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            if (applyingResponsiveLayout || rootLayout.IsDisposed || toolsLayout.IsDisposed || toolsLayout.ClientSize.Width <= 0) return;
+            applyingResponsiveLayout = true;
+            try
+            {
+                int logicalWidth = UiTheme.LogicalPixels(this, Math.Max(1, ClientSize.Width));
+                bool compact = logicalWidth < 1020;
+                rootLayout.RowStyles[0].Height = UiTheme.DpiPixels(this, compact ? 74 : 82);
+                rootLayout.RowStyles[3].Height = UiTheme.DpiPixels(this, 32);
+                int required = UiTheme.RequiredFlowLayoutHeight(toolsLayout);
+                rootLayout.RowStyles[1].Height = Math.Max(UiTheme.DpiPixels(this, 52), required);
+                toolsLayout.MinimumSize = new Size(0, required);
+                toolsLayout.Height = required;
+                rootLayout.PerformLayout();
+
+                int available = Math.Max(1, split.ClientSize.Width - split.SplitterWidth);
+                int desiredPanel2 = UiTheme.DpiPixels(this, compact ? 210 : 235);
+                int desiredPanel1 = UiTheme.DpiPixels(this, compact ? 360 : 480);
+                split.Panel2MinSize = Math.Min(desiredPanel2, Math.Max(UiTheme.DpiPixels(this, 160), available / 2));
+                int maximumPanel1 = Math.Max(1, available - split.Panel2MinSize);
+                split.Panel1MinSize = Math.Min(desiredPanel1, maximumPanel1);
+                split.SplitterDistance = maximumPanel1;
+            }
+            finally { applyingResponsiveLayout = false; }
         }
 
         private void RefreshInventory()
@@ -1110,6 +1140,7 @@ namespace RogueCleanerV2
             StartPosition = FormStartPosition.CenterParent;
             MinimumSize = new Size(700, 540);
             Size = new Size(760, 590);
+            AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = UiTheme.Surface;
             Font = UiTheme.Font(9F, FontStyle.Regular);
             UiTheme.ApplyWindowIdentity(this);
@@ -1199,6 +1230,7 @@ namespace RogueCleanerV2
             MaximizeBox = false;
             MinimizeBox = false;
             ClientSize = new Size(560, 330);
+            AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = UiTheme.Surface;
             Font = UiTheme.Font(9F, FontStyle.Regular);
             UiTheme.ApplyWindowIdentity(this);

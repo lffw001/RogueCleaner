@@ -533,22 +533,63 @@ namespace RogueCleanerV2
         private readonly Button enableButton = new Button();
         private readonly Button disableButton = new Button();
         private readonly Button deleteButton = new Button();
+        private readonly TableLayoutPanel rootLayout = new TableLayoutPanel();
+        private readonly FlowLayoutPanel toolsLayout = new FlowLayoutPanel();
         private SpecialMenuInventory inventory;
+        private bool applyingResponsiveLayout;
 
         public SpecialContextMenuForm(DataStore store)
         {
-            this.store = store; Text = "右键专用模块"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(980, 620); Size = new Size(1160, 700); BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this); BuildUi(); Shown += delegate { RefreshRows(); };
+            this.store = store; Text = "右键专用模块"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(900, 500); Size = new Size(1160, 700); AutoScaleMode = AutoScaleMode.Dpi; BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this); BuildUi(); Shown += delegate { FitToWorkingArea(); ApplyResponsiveLayout(); RefreshRows(); };
         }
 
         private void BuildUi()
         {
-            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(16) }; root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); Controls.Add(root);
-            root.Controls.Add(UiTheme.ModuleHeader("更多右键位置", "管理“新建”“发送到”“打开方式”以及组件屏蔽等扩展入口"), 0, 0);
-            FlowLayoutPanel filter = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = UiTheme.Surface, Padding = new Padding(8, 6, 8, 6) }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 220; module.Items.AddRange(new object[] { "全部模块", "新建菜单", "发送到菜单", "打开方式", "打开方式应用程序", "组件屏蔽" }); module.SelectedIndex = 0; filter.Controls.Add(new Label { Text = "显示模块", AutoSize = true, ForeColor = UiTheme.Muted, Margin = new Padding(0, 5, 10, 0) }); filter.Controls.Add(module); root.Controls.Add(filter, 0, 1);
-            FlowLayoutPanel bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Padding = new Padding(0, 7, 0, 7) }; Button add = new Button(); UiTheme.ToolButton(refreshButton, "刷新列表", SystemIcons.Information); UiTheme.ToolButton(enableButton, "显示选中", SystemIcons.Shield); UiTheme.ToolButton(disableButton, "隐藏选中", SystemIcons.Warning); UiTheme.ToolButton(add, "添加项目", SystemIcons.Information); UiTheme.ToolButton(deleteButton, "删除项目", SystemIcons.Error); bar.Controls.Add(refreshButton); bar.Controls.Add(enableButton); bar.Controls.Add(disableButton); bar.Controls.Add(add); bar.Controls.Add(deleteButton); root.Controls.Add(bar, 0, 2);
-            grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; grid.BackgroundColor = UiTheme.Surface; grid.RowTemplate.Height = 34; grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "SoftwareIcon", HeaderText = "", Width = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ImageLayout = DataGridViewImageCellLayout.Normal }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 150 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SoftwareName", HeaderText = "关联软件", FillWeight = 110 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ModuleDisplay", HeaderText = "模块", FillWeight = 100 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 180 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); Panel gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface }; UiTheme.AttachModernScrollBar(gridHost, grid); root.Controls.Add(gridHost, 0, 3);
-            status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; root.Controls.Add(status, 0, 4);
+            rootLayout.Dock = DockStyle.Fill; rootLayout.ColumnCount = 1; rootLayout.RowCount = 5; rootLayout.Padding = new Padding(16); rootLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); Controls.Add(rootLayout);
+            rootLayout.Controls.Add(UiTheme.ModuleHeader("更多右键位置", "管理“新建”“发送到”“打开方式”以及组件屏蔽等扩展入口"), 0, 0);
+            FlowLayoutPanel filter = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = UiTheme.Surface, Padding = new Padding(8, 6, 8, 6) }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 220; module.Items.AddRange(new object[] { "全部模块", "新建菜单", "发送到菜单", "打开方式", "打开方式应用程序", "组件屏蔽" }); module.SelectedIndex = 0; filter.Controls.Add(new Label { Text = "显示模块", AutoSize = true, ForeColor = UiTheme.Muted, Margin = new Padding(0, 5, 10, 0) }); filter.Controls.Add(module); rootLayout.Controls.Add(filter, 0, 1);
+            toolsLayout.Dock = DockStyle.Fill; toolsLayout.WrapContents = true; toolsLayout.AutoScroll = false; toolsLayout.Padding = new Padding(0, 7, 0, 7); Button add = new Button(); UiTheme.ToolButton(refreshButton, "刷新列表", SystemIcons.Information); UiTheme.ToolButton(enableButton, "显示选中", SystemIcons.Shield); UiTheme.ToolButton(disableButton, "隐藏选中", SystemIcons.Warning); UiTheme.ToolButton(add, "添加项目", SystemIcons.Information); UiTheme.ToolButton(deleteButton, "删除项目", SystemIcons.Error); toolsLayout.Controls.Add(refreshButton); toolsLayout.Controls.Add(enableButton); toolsLayout.Controls.Add(disableButton); toolsLayout.Controls.Add(add); toolsLayout.Controls.Add(deleteButton); rootLayout.Controls.Add(toolsLayout, 0, 2);
+            grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; grid.BackgroundColor = UiTheme.Surface; grid.RowTemplate.Height = 34; grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "SoftwareIcon", HeaderText = "", Width = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ImageLayout = DataGridViewImageCellLayout.Normal }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 150 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SoftwareName", HeaderText = "关联软件", FillWeight = 110 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ModuleDisplay", HeaderText = "模块", FillWeight = 100 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 180 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); Panel gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface }; UiTheme.AttachModernScrollBar(gridHost, grid); rootLayout.Controls.Add(gridHost, 0, 3);
+            status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; rootLayout.Controls.Add(status, 0, 4);
             refreshButton.Click += delegate { RefreshRows(); }; module.SelectedIndexChanged += delegate { ApplyFilter(); }; enableButton.Click += delegate { Toggle(true); }; disableButton.Click += delegate { Toggle(false); }; deleteButton.Click += delegate { DeleteCurrent(); }; add.Click += delegate { AddCurrentModule(); }; grid.SelectionChanged += delegate { UpdateActions(); };
+            SizeChanged += delegate { ApplyResponsiveLayout(); };
+            toolsLayout.SizeChanged += delegate { ApplyResponsiveLayout(); };
+        }
+
+        private void FitToWorkingArea()
+        {
+            if (!IsHandleCreated) return;
+            Size logicalMinimum = new Size(UiTheme.DpiPixels(this, 900), UiTheme.DpiPixels(this, 500));
+            MinimumSize = logicalMinimum;
+            Rectangle workArea = Screen.FromControl(this).WorkingArea;
+            Size preferred = new Size(UiTheme.DpiPixels(this, 1160), UiTheme.DpiPixels(this, 700));
+            int edge = UiTheme.DpiPixels(this, 12);
+            Size allowed = new Size(Math.Max(logicalMinimum.Width, workArea.Width - edge * 2), Math.Max(logicalMinimum.Height, workArea.Height - edge * 2));
+            Size target = new Size(Math.Min(preferred.Width, allowed.Width), Math.Min(preferred.Height, allowed.Height));
+            if (Size != target) Size = target;
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            if (applyingResponsiveLayout || rootLayout.IsDisposed || toolsLayout.IsDisposed || toolsLayout.ClientSize.Width <= 0) return;
+            applyingResponsiveLayout = true;
+            try
+            {
+                int padding = UiTheme.DpiPixels(this, 16);
+                rootLayout.Padding = new Padding(padding);
+                rootLayout.RowStyles[0].Height = UiTheme.DpiPixels(this, 70);
+                rootLayout.RowStyles[1].Height = UiTheme.DpiPixels(this, 44);
+                rootLayout.RowStyles[4].Height = UiTheme.DpiPixels(this, 30);
+                module.Width = UiTheme.DpiPixels(this, 220);
+                int verticalPadding = UiTheme.DpiPixels(this, 7);
+                toolsLayout.Padding = new Padding(0, verticalPadding, 0, verticalPadding);
+                int required = UiTheme.RequiredFlowLayoutHeight(toolsLayout);
+                rootLayout.RowStyles[2].Height = Math.Max(UiTheme.DpiPixels(this, 50), required);
+                toolsLayout.MinimumSize = new Size(0, required);
+                toolsLayout.Height = required;
+                rootLayout.PerformLayout();
+            }
+            finally { applyingResponsiveLayout = false; }
         }
 
         private static Button ButtonOf(string text, Color color) { Button button = new Button(); UiTheme.OutlineButton(button, text, color); return button; }
@@ -582,7 +623,7 @@ namespace RogueCleanerV2
         public string FirstValue { get { return first.Text.Trim(); } } public string SecondValue { get { return second.Text.Trim(); } }
         public SpecialMenuAddForm(string module)
         {
-            Text = "添加 " + SpecialMenuDisplay.Name(module); StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(620, 230); BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this);
+            Text = "添加 " + SpecialMenuDisplay.Name(module); StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(620, 230); AutoScaleMode = AutoScaleMode.Dpi; BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this);
             string firstLabel = module.StartsWith("ShellNew") || module.StartsWith("OpenWith") ? "文件扩展名" : module.StartsWith("SendTo") ? "显示名称" : "组件编号";
             string secondLabel = module.StartsWith("ShellNew") ? "模板文件（可空）" : module.StartsWith("OpenWith") ? "程序关联标识" : module.StartsWith("SendTo") ? "目标路径" : "说明（可空）";
             TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, Padding = new Padding(22) }; root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); Controls.Add(root);

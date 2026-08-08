@@ -27,15 +27,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.14.0")]
-[assembly: AssemblyFileVersion("2.0.14.0")]
+[assembly: AssemblyVersion("2.0.15.0")]
+[assembly: AssemblyFileVersion("2.0.15.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.14";
+        public const string Version = "2.0.15";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/home.php?mod=space&uid=286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -74,6 +74,13 @@ namespace RogueCleanerV2
             store.Ensure();
             Logger.Initialize(store);
             bool smoke = HasArg(args, "--scan-smoke");
+            bool vendorReviewSmoke = HasArg(args, "--vendor-review-smoke");
+            if (vendorReviewSmoke)
+            {
+                string review = VendorReviewWriter.Write(store, Application.ExecutablePath);
+                Environment.ExitCode = File.Exists(review) ? 0 : 11;
+                return Environment.ExitCode;
+            }
             bool identitySmoke = HasArg(args, "--identity-smoke");
             bool feedbackSmoke = HasArg(args, "--feedback-smoke");
             bool uiSmoke = HasArg(args, "--ui-smoke");
@@ -517,6 +524,94 @@ namespace RogueCleanerV2
         {
             PropertyChangedEventHandler handler = PropertyChanged;
             if (handler != null) handler(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
+    internal sealed class UserWhitelistEntry
+    {
+        public string Key { get; set; }
+        public string Name { get; set; }
+        public string AddedAt { get; set; }
+    }
+
+    internal static class UserWhitelistStore
+    {
+        private const string FileName = "user-whitelist.json";
+
+        public static string KeyFor(Finding finding)
+        {
+            if (finding == null) return string.Empty;
+            ActionTarget target = finding.Target ?? new ActionTarget();
+            return string.Join("|", new string[] { target.Kind, target.Hive, target.View, target.SubKey, target.ValueName, target.FilePath, target.ServiceName, target.TaskName, target.Clsid, finding.UserVisibleName })
+                .ToLowerInvariant();
+        }
+
+        public static List<UserWhitelistEntry> Load(DataStore store)
+        {
+            try
+            {
+                string path = store.StateFile(FileName);
+                if (!File.Exists(path)) return new List<UserWhitelistEntry>();
+                List<UserWhitelistEntry> entries = new JavaScriptSerializer().Deserialize<List<UserWhitelistEntry>>(File.ReadAllText(path, Encoding.UTF8));
+                return entries == null ? new List<UserWhitelistEntry>() : entries.Where(delegate(UserWhitelistEntry entry) { return entry != null && !string.IsNullOrWhiteSpace(entry.Key); }).ToList();
+            }
+            catch (Exception ex) { Logger.Error("读取用户白名单失败", ex); return new List<UserWhitelistEntry>(); }
+        }
+
+        public static void Save(DataStore store, List<UserWhitelistEntry> entries)
+        {
+            Directory.CreateDirectory(store.State);
+            File.WriteAllText(store.StateFile(FileName), new JavaScriptSerializer().Serialize(entries ?? new List<UserWhitelistEntry>()), new UTF8Encoding(false));
+        }
+
+        public static bool Add(DataStore store, Finding finding)
+        {
+            string key = KeyFor(finding);
+            if (string.IsNullOrWhiteSpace(key)) return false;
+            List<UserWhitelistEntry> entries = Load(store);
+            if (entries.Any(delegate(UserWhitelistEntry entry) { return string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase); })) return false;
+            entries.Add(new UserWhitelistEntry { Key = key, Name = finding.UserVisibleName, AddedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") });
+            Save(store, entries);
+            return true;
+        }
+
+        public static bool Remove(DataStore store, Finding finding)
+        {
+            string key = KeyFor(finding);
+            List<UserWhitelistEntry> entries = Load(store);
+            int removed = entries.RemoveAll(delegate(UserWhitelistEntry entry) { return string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase); });
+            if (removed > 0) Save(store, entries);
+            return removed > 0;
+        }
+
+        public static void Apply(DataStore store, IEnumerable<Finding> findings)
+        {
+            HashSet<string> keys = new HashSet<string>(Load(store).Select(delegate(UserWhitelistEntry entry) { return entry.Key; }), StringComparer.OrdinalIgnoreCase);
+            foreach (Finding finding in findings)
+            {
+                if (!keys.Contains(KeyFor(finding))) continue;
+                finding.Selected = false;
+                finding.Risk = "低";
+                finding.Status = "已白名单";
+                finding.UserImpact = "用户已主动加入本地白名单；本次仍保留证据展示，不建议处理。";
+                finding.ActionKind = "ReportOnly";
+            }
+        }
+    }
+
+    internal static class VendorReviewWriter
+    {
+        public static string Write(DataStore store, string executablePath)
+        {
+            string hash;
+            using (SHA256 sha = SHA256.Create()) using (FileStream stream = File.OpenRead(executablePath)) hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty);
+            FileVersionInfo version = FileVersionInfo.GetVersionInfo(executablePath);
+            string signer = "未检测到有效签名";
+            try { X509Certificate certificate = X509Certificate.CreateFromSignedFile(executablePath); if (certificate != null) signer = certificate.Subject; } catch { }
+            string path = Path.Combine(store.Reports, "vendor-review-" + store.Timestamp() + ".md");
+            string body = "# 安全软件误报复核材料\n\n- 产品：" + AppMeta.ProductName + "\n- 版本：" + AppMeta.Version + "\n- 文件名：" + Path.GetFileName(executablePath) + "\n- SHA-256：`" + hash + "`\n- 签名：" + signer + "\n- 生成时间：" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n\n该材料仅用于向安全软件厂商申请复核；程序不包含规避、绕过或对抗安全软件的功能。\n";
+            File.WriteAllText(path, body, new UTF8Encoding(false));
+            return path;
         }
     }
 
@@ -1902,6 +1997,7 @@ namespace RogueCleanerV2
 
             scanners.Add(delegate { RunScanner(all, gate, sink, "右键菜单", ScanContextMenus); });
             scanners.Add(delegate { RunScanner(all, gate, sink, "此电脑入口", ScanExplorerNamespaces); });
+            scanners.Add(delegate { RunScanner(all, gate, sink, "网盘虚拟盘", ScanCloudVirtualDrives); });
             scanners.Add(delegate { RunScanner(all, gate, sink, "开机启动", ScanStartupRegistry); });
             scanners.Add(delegate { RunScanner(all, gate, sink, "启动文件夹", ScanStartupFolders); });
             scanners.Add(delegate { RunScanner(all, gate, sink, "后台服务", ScanServices); });
@@ -2171,6 +2267,29 @@ namespace RogueCleanerV2
                         list.Add(NewFinding("浏览器插件/外部宿主", title, "浏览器可能会加载：" + title, target, text, 35, identity, RuleCatalog.HasBadComponent(evidence, identity)));
                     }
                 }
+            }
+            return list;
+        }
+
+        private List<Finding> ScanCloudVirtualDrives()
+        {
+            List<Finding> list = new List<Finding>();
+            string[] tokens = new string[] { "网盘", "云盘", "netdisk", "cloud", "baidu", "quark", "aliyun", "onedrive", "dropbox", "115" };
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    string label = drive.IsReady ? drive.VolumeLabel : string.Empty;
+                    string evidence = Join(drive.Name, label, drive.DriveFormat, drive.DriveType.ToString());
+                    bool namedCloud = tokens.Any(delegate(string token) { return evidence.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0; });
+                    if (!namedCloud) continue;
+                    ActionTarget target = new ActionTarget { Kind = "ReportOnly", FilePath = drive.Name };
+                    VendorIdentityResult identity = RuleCatalog.ResolveIdentity(new VendorEvidence().AddHuman(label).AddTechnical(evidence));
+                    Finding finding = NewFinding("网盘虚拟盘（只读诊断）", string.IsNullOrWhiteSpace(label) ? drive.Name : label + "（" + drive.Name + "）", "检测到可能由网盘创建的盘符。仅展示诊断证据，不修改设备、驱动器、盘符或网盘客户端。", target, evidence, 5, identity, false);
+                    finding.Status = "仅提示";
+                    list.Add(finding);
+                }
+                catch (Exception ex) { Logger.Error("读取网盘虚拟盘信息失败", ex); }
             }
             return list;
         }
@@ -4531,8 +4650,19 @@ namespace RogueCleanerV2
         private int gridDataErrorCount;
         private readonly Button copyDetailButton = new Button();
         private readonly SplitContainer contentSplit = new SplitContainer();
+        private readonly TableLayoutPanel rootLayout = new TableLayoutPanel();
+        private readonly TableLayoutPanel headerLayout = new TableLayoutPanel();
+        private readonly FlowLayoutPanel headerActionsLayout = new FlowLayoutPanel();
+        private readonly TableLayoutPanel commandLayout = new TableLayoutPanel();
+        private readonly FlowLayoutPanel primaryActionsLayout = new FlowLayoutPanel();
+        private readonly TableLayoutPanel footerLayout = new TableLayoutPanel();
+        private readonly TableLayoutPanel authorAreaLayout = new TableLayoutPanel();
+        private readonly TableLayoutPanel summaryCardsLayout = new TableLayoutPanel();
+        private readonly TableLayoutPanel contentLayout = new TableLayoutPanel();
+        private readonly Control[] summaryCards = new Control[4];
         private string latestEvidenceReportPath;
         private bool isBusy;
+        private bool applyingResponsiveLayout;
         private string activeCategoryFilter = "总览";
         private ElevationResumeState startupResume;
 
@@ -4565,38 +4695,40 @@ namespace RogueCleanerV2
         {
             Text = AppMeta.ProductName + " " + AppMeta.Version;
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(1120, 700);
+            // 900 x 500 logical pixels fits a 1920 x 1080 screen at 200% scaling;
+            // the responsive layout keeps every primary operation visible there.
+            MinimumSize = new Size(900, 500);
             Size = new Size(1360, 820);
             AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = UiTheme.Canvas;
             Font = UiTheme.Font(9F, FontStyle.Regular);
             UiTheme.ApplyWindowIdentity(this);
 
-            TableLayoutPanel root = new TableLayoutPanel();
-            root.Dock = DockStyle.Fill;
-            root.RowCount = 4;
-            root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            root.Margin = new Padding(0);
-            root.Padding = new Padding(0);
-            Controls.Add(root);
+            rootLayout.Dock = DockStyle.Fill;
+            rootLayout.RowCount = 4;
+            rootLayout.ColumnCount = 1;
+            rootLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            rootLayout.Margin = new Padding(0);
+            rootLayout.Padding = new Padding(0);
+            Controls.Add(rootLayout);
 
-            TableLayoutPanel header = new TableLayoutPanel();
-            header.Dock = DockStyle.Fill;
-            header.BackColor = UiTheme.Surface;
-            header.ColumnCount = 2;
-            header.RowCount = 1;
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-            header.Padding = new Padding(22, 8, 18, 7);
-            root.Controls.Add(header, 0, 0);
+            headerLayout.Dock = DockStyle.Fill;
+            headerLayout.BackColor = UiTheme.Surface;
+            headerLayout.ColumnCount = 2;
+            headerLayout.RowCount = 1;
+            headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+            headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
+            headerLayout.Padding = new Padding(22, 8, 18, 7);
+            rootLayout.Controls.Add(headerLayout, 0, 0);
 
             FlowLayoutPanel brand = new FlowLayoutPanel();
             brand.Dock = DockStyle.Fill;
             brand.WrapContents = false;
+            brand.AutoScroll = false;
             brand.FlowDirection = FlowDirection.LeftToRight;
             brand.Margin = new Padding(0);
             PictureBox brandIcon = new PictureBox { Size = new Size(30, 30), SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 2, 10, 0) };
@@ -4613,38 +4745,42 @@ namespace RogueCleanerV2
             versionLabel.Size = new Size(66, 24);
             versionLabel.Margin = new Padding(0, 7, 0, 0);
             brand.Controls.Add(versionLabel);
-            header.Controls.Add(brand, 0, 0);
+            headerLayout.Controls.Add(brand, 0, 0);
 
-            FlowLayoutPanel headerActions = new FlowLayoutPanel();
-            headerActions.Dock = DockStyle.Fill;
-            headerActions.AutoSize = false;
-            headerActions.WrapContents = false;
-            headerActions.FlowDirection = FlowDirection.RightToLeft;
-            headerActions.Margin = new Padding(0);
+            headerActionsLayout.Dock = DockStyle.Fill;
+            headerActionsLayout.AutoSize = false;
+            headerActionsLayout.WrapContents = false;
+            headerActionsLayout.AutoScroll = false;
+            headerActionsLayout.FlowDirection = FlowDirection.RightToLeft;
+            headerActionsLayout.Margin = new Padding(0);
             UiTheme.HeaderButton(adminButton, AdminUtil.IsAdministrator() ? "管理员模式" : "请求管理员权限");
             UiTheme.HeaderButton(feedbackButton, "反馈");
             UiTheme.HeaderButton(aboutButton, "关于");
             UiTheme.HeaderButton(updateButton, "检查更新");
             adminButton.Margin = feedbackButton.Margin = aboutButton.Margin = updateButton.Margin = new Padding(4, 4, 0, 0);
-            headerActions.Controls.Add(adminButton);
-            headerActions.Controls.Add(feedbackButton);
-            headerActions.Controls.Add(aboutButton);
-            headerActions.Controls.Add(updateButton);
-            header.Controls.Add(headerActions, 1, 0);
+            headerActionsLayout.Controls.Add(adminButton);
+            headerActionsLayout.Controls.Add(feedbackButton);
+            headerActionsLayout.Controls.Add(aboutButton);
+            headerActionsLayout.Controls.Add(updateButton);
+            headerLayout.Controls.Add(headerActionsLayout, 1, 0);
             adminButton.Enabled = !AdminUtil.IsAdministrator();
             feedbackButton.Enabled = true;
             latestEvidenceReportPath = FindLatestEvidenceReport();
 
-            TableLayoutPanel command = new TableLayoutPanel();
-            command.Dock = DockStyle.Fill;
-            command.BackColor = UiTheme.Surface;
-            command.RowCount = 2;
-            command.ColumnCount = 1;
-            command.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            command.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
-            command.Padding = new Padding(22, 11, 18, 0);
-            root.Controls.Add(command, 0, 1);
-            FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Margin = new Padding(0), Padding = new Padding(0) };
+            commandLayout.Dock = DockStyle.Fill;
+            commandLayout.BackColor = UiTheme.Surface;
+            commandLayout.RowCount = 2;
+            commandLayout.ColumnCount = 1;
+            commandLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            commandLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            commandLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
+            commandLayout.Padding = new Padding(22, 11, 18, 0);
+            rootLayout.Controls.Add(commandLayout, 0, 1);
+            primaryActionsLayout.Dock = DockStyle.Fill;
+            primaryActionsLayout.WrapContents = true;
+            primaryActionsLayout.AutoScroll = false;
+            primaryActionsLayout.Margin = new Padding(0);
+            primaryActionsLayout.Padding = new Padding(0);
             UiTheme.HighlightButton(scanButton, "开始扫描");
             UiTheme.OutlineButton(cleanButton, "清理勾选", UiTheme.Danger);
             UiTheme.OutlineButton(selectAllButton, "勾选可清理", UiTheme.Primary);
@@ -4662,18 +4798,18 @@ namespace RogueCleanerV2
                 actionButton.TextAlign = ContentAlignment.MiddleCenter;
                 actionButton.ImageAlign = ContentAlignment.MiddleLeft;
             }
-            actions.Controls.Add(scanButton);
-            actions.Controls.Add(cleanButton);
-            actions.Controls.Add(selectAllButton);
-            actions.Controls.Add(lowButton);
-            actions.Controls.Add(restoreButton);
-            actions.Controls.Add(reportButton);
-            command.Controls.Add(actions, 0, 0);
+            primaryActionsLayout.Controls.Add(scanButton);
+            primaryActionsLayout.Controls.Add(cleanButton);
+            primaryActionsLayout.Controls.Add(selectAllButton);
+            primaryActionsLayout.Controls.Add(lowButton);
+            primaryActionsLayout.Controls.Add(restoreButton);
+            primaryActionsLayout.Controls.Add(reportButton);
+            commandLayout.Controls.Add(primaryActionsLayout, 0, 0);
             progress.Dock = DockStyle.Fill;
             progress.Margin = new Padding(0);
             progress.Style = ProgressBarStyle.Continuous;
             progress.Visible = false;
-            command.Controls.Add(progress, 0, 1);
+            commandLayout.Controls.Add(progress, 0, 1);
 
             TableLayoutPanel workspace = new TableLayoutPanel();
             workspace.Dock = DockStyle.Fill;
@@ -4682,27 +4818,30 @@ namespace RogueCleanerV2
             workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 168));
             workspace.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             workspace.Margin = new Padding(0);
-            root.Controls.Add(workspace, 0, 2);
+            rootLayout.Controls.Add(workspace, 0, 2);
             workspace.Controls.Add(BuildNavigation(), 0, 0);
 
-            TableLayoutPanel content = new TableLayoutPanel();
-            content.Dock = DockStyle.Fill;
-            content.ColumnCount = 1;
-            content.RowCount = 3;
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            content.Padding = new Padding(14, 12, 14, 12);
-            content.Margin = new Padding(0);
-            workspace.Controls.Add(content, 1, 0);
+            contentLayout.Dock = DockStyle.Fill;
+            contentLayout.ColumnCount = 1;
+            contentLayout.RowCount = 3;
+            contentLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            contentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+            contentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+            contentLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            contentLayout.Padding = new Padding(14, 12, 14, 12);
+            contentLayout.Margin = new Padding(0);
+            workspace.Controls.Add(contentLayout, 1, 0);
 
-            TableLayoutPanel cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 0, 0, 4) };
-            for (int i = 0; i < 4; i++) cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            cards.Controls.Add(CreateSummaryCard("发现项目", totalCardValue, UiTheme.Info, "本次扫描总数"), 0, 0);
-            cards.Controls.Add(CreateSummaryCard("建议处理", suggestionCardValue, UiTheme.Danger, "存在可恢复处理动作"), 1, 0);
-            cards.Controls.Add(CreateSummaryCard("可管理", manageableCardValue, UiTheme.Success, "正常第三方或低风险项"), 2, 0);
-            cards.Controls.Add(CreateSummaryCard("仅提示 / 未知", unknownCardValue, UiTheme.Muted, "不进入批量清理"), 3, 0);
-            content.Controls.Add(cards, 0, 0);
+            summaryCardsLayout.Dock = DockStyle.Fill;
+            summaryCardsLayout.ColumnCount = 4;
+            summaryCardsLayout.RowCount = 1;
+            summaryCardsLayout.Margin = new Padding(0, 0, 0, 4);
+            summaryCards[0] = CreateSummaryCard("发现项目", totalCardValue, UiTheme.Info, "本次扫描总数");
+            summaryCards[1] = CreateSummaryCard("建议处理", suggestionCardValue, UiTheme.Danger, "存在可恢复处理动作");
+            summaryCards[2] = CreateSummaryCard("可管理", manageableCardValue, UiTheme.Success, "正常第三方或低风险项");
+            summaryCards[3] = CreateSummaryCard("仅提示 / 未知", unknownCardValue, UiTheme.Muted, "不进入批量清理");
+            foreach (Control card in summaryCards) summaryCardsLayout.Controls.Add(card);
+            contentLayout.Controls.Add(summaryCardsLayout, 0, 0);
 
             TableLayoutPanel filterBar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, BackColor = UiTheme.Canvas, Margin = new Padding(0) };
             filterBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -4711,7 +4850,7 @@ namespace RogueCleanerV2
             summaryLabel.ForeColor = UiTheme.Muted;
             summaryLabel.Text = "未扫描。";
             filterBar.Controls.Add(summaryLabel, 0, 0);
-            content.Controls.Add(filterBar, 0, 1);
+            contentLayout.Controls.Add(filterBar, 0, 1);
 
             grid.Dock = DockStyle.Fill;
             grid.AutoGenerateColumns = false;
@@ -4769,37 +4908,38 @@ namespace RogueCleanerV2
             UiTheme.AttachModernScrollBar(gridCard, grid);
             contentSplit.Panel1.Controls.Add(gridCard);
             contentSplit.Panel2.Controls.Add(BuildDetailPanel());
-            content.Controls.Add(contentSplit, 0, 2);
+            contentLayout.Controls.Add(contentSplit, 0, 2);
 
-            TableLayoutPanel footer = new TableLayoutPanel();
-            footer.Dock = DockStyle.Fill;
-            footer.BackColor = Color.FromArgb(238, 242, 247);
-            footer.ColumnCount = 2;
-            footer.RowCount = 1;
-            footer.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
-            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 400));
-            root.Controls.Add(footer, 0, 3);
+            footerLayout.Dock = DockStyle.Fill;
+            footerLayout.BackColor = Color.FromArgb(238, 242, 247);
+            footerLayout.ColumnCount = 2;
+            footerLayout.RowCount = 1;
+            footerLayout.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
+            footerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
+            footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+            footerLayout.Margin = new Padding(0);
+            rootLayout.Controls.Add(footerLayout, 0, 3);
             statusLabel.Dock = DockStyle.Fill;
+            statusLabel.Margin = new Padding(0);
             statusLabel.TextAlign = ContentAlignment.MiddleLeft;
             statusLabel.Padding = new Padding(14, 0, 0, 0);
             statusLabel.ForeColor = UiTheme.Muted;
+            statusLabel.AutoEllipsis = true;
             statusLabel.Text = "就绪。数据目录：" + store.Root;
-            footer.Controls.Add(statusLabel, 0, 0);
+            footerLayout.Controls.Add(statusLabel, 0, 0);
 
-            TableLayoutPanel authorArea = new TableLayoutPanel();
-            authorArea.Dock = DockStyle.Fill;
-            authorArea.ColumnCount = 3;
-            authorArea.RowCount = 1;
-            authorArea.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
-            authorArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            authorArea.Margin = new Padding(0);
-            authorArea.Padding = new Padding(0, 2, 10, 2);
-            authorArea.BackColor = footer.BackColor;
-            authorArea.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-            authorArea.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-            authorArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            authorAreaLayout.Dock = DockStyle.Fill;
+            authorAreaLayout.ColumnCount = 3;
+            authorAreaLayout.RowCount = 1;
+            authorAreaLayout.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
+            authorAreaLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            authorAreaLayout.Margin = new Padding(0);
+            authorAreaLayout.Padding = new Padding(0, 2, 10, 2);
+            authorAreaLayout.BackColor = footerLayout.BackColor;
+            authorAreaLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+            authorAreaLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+            authorAreaLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
             authorLabel.Dock = DockStyle.Fill;
             authorLabel.AutoSize = false;
             authorLabel.Text = "作者：" + AppMeta.AuthorName;
@@ -4809,10 +4949,10 @@ namespace RogueCleanerV2
             authorLabel.Cursor = Cursors.Default;
             ConfigureAuthorDestination(author52PojieLink, "吾爱破解", "RogueCleanerV2.Assets.52PojieFavicon", "打开作者的吾爱破解主页");
             ConfigureAuthorDestination(authorGitHubLink, "GitHub", "RogueCleanerV2.Assets.GitHubFavicon", "打开作者的 GitHub 主页");
-            authorArea.Controls.Add(authorLabel, 0, 0);
-            authorArea.Controls.Add(author52PojieLink, 1, 0);
-            authorArea.Controls.Add(authorGitHubLink, 2, 0);
-            footer.Controls.Add(authorArea, 1, 0);
+            authorAreaLayout.Controls.Add(authorLabel, 0, 0);
+            authorAreaLayout.Controls.Add(author52PojieLink, 1, 0);
+            authorAreaLayout.Controls.Add(authorGitHubLink, 2, 0);
+            footerLayout.Controls.Add(authorAreaLayout, 1, 0);
 
             scanButton.Click += delegate { StartScan(); };
             cleanButton.Click += delegate { StartClean(); };
@@ -4832,21 +4972,110 @@ namespace RogueCleanerV2
             grid.CellToolTipTextNeeded += GridCellToolTipTextNeeded;
             grid.CellFormatting += GridCellFormatting;
             grid.CellClick += GridCellClick;
+            grid.MouseDown += GridMouseDown;
             grid.SelectionChanged += delegate { feedbackButton.Enabled = !isBusy; UpdateDetails(); };
             grid.KeyDown += GridKeyDown;
             author52PojieLink.Click += delegate { OpenAuthorDestination(AppMeta.Author52PojieUrl); };
             authorGitHubLink.Click += delegate { OpenAuthorDestination(AppMeta.AuthorGitHubUrl); };
             copyDetailButton.Click += delegate { CopyCurrentDetails(); };
+            SizeChanged += delegate { ApplyResponsiveLayout(); };
+            summaryCardsLayout.SizeChanged += delegate { ApplyResponsiveLayout(); };
+            contentSplit.SizeChanged += delegate { ApplyResponsiveLayout(); };
             Shown += delegate
             {
-                if (contentSplit.Width > 850)
-                {
-                    contentSplit.Panel1MinSize = 500;
-                    contentSplit.Panel2MinSize = 220;
-                    contentSplit.SplitterDistance = Math.Max(560, contentSplit.Width - 245);
-                }
+                ApplyResponsiveLayout();
                 UpdateDetails();
             };
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            if (applyingResponsiveLayout || summaryCardsLayout.IsDisposed || contentLayout.IsDisposed || contentSplit.IsDisposed || rootLayout.IsDisposed) return;
+            applyingResponsiveLayout = true;
+            try
+            {
+                int logicalWidth = UiTheme.LogicalPixels(this, Math.Max(1, ClientSize.Width));
+                int logicalHeight = UiTheme.LogicalPixels(this, Math.Max(1, ClientSize.Height));
+                bool twoRows = logicalWidth < 1120;
+                bool compactHeight = logicalHeight < 570;
+                int columnCount = twoRows ? 2 : 4;
+                int rowCount = twoRows ? 2 : 1;
+                int summaryHeight = UiTheme.DpiPixels(this, twoRows ? 112 : 62);
+
+                // At 200% a 1080p display offers roughly 960 x 540 logical pixels.
+                // Keep navigation and all six primary actions on screen instead of
+                // relying on hidden horizontal/vertical scrolling.
+                // The compact header must still accommodate a 40 px header action
+                // plus its vertical margin.  Derive the FlowLayoutPanel height from
+                // the actual table client area below so border/non-client rounding
+                // cannot push it outside its parent at high DPI.
+                rootLayout.RowStyles[0].Height = UiTheme.DpiPixels(this, compactHeight ? 60 : 64);
+                rootLayout.RowStyles[1].Height = UiTheme.DpiPixels(this, compactHeight ? 64 : 66);
+                rootLayout.RowStyles[3].Height = UiTheme.DpiPixels(this, compactHeight ? 30 : 34);
+                // At compact logical widths the four header actions need a little
+                // more than 63% once their 2x-DPI button margins are included.
+                // Keep the brand complete, but give the action bar 67% so its
+                // left-most update button never falls outside the RTL flow panel.
+                headerLayout.ColumnStyles[0].Width = logicalWidth < 1000 ? 33F : 48F;
+                headerLayout.ColumnStyles[1].Width = logicalWidth < 1000 ? 67F : 52F;
+                bool compactFooter = logicalWidth < 1000;
+                footerLayout.ColumnStyles[0].Width = compactFooter ? 100F : 65F;
+                footerLayout.ColumnStyles[1].Width = compactFooter ? 0F : 35F;
+                authorAreaLayout.Visible = !compactFooter;
+                headerLayout.Padding = new Padding(UiTheme.DpiPixels(this, compactHeight ? 14 : 22), UiTheme.DpiPixels(this, compactHeight ? 5 : 8), UiTheme.DpiPixels(this, compactHeight ? 12 : 18), UiTheme.DpiPixels(this, compactHeight ? 4 : 7));
+                commandLayout.Padding = new Padding(UiTheme.DpiPixels(this, compactHeight ? 14 : 22), UiTheme.DpiPixels(this, compactHeight ? 7 : 11), UiTheme.DpiPixels(this, compactHeight ? 12 : 18), 0);
+                commandLayout.RowStyles[1].Height = UiTheme.DpiPixels(this, 3);
+                rootLayout.PerformLayout();
+                int headerContentHeight = Math.Max(1, headerLayout.ClientSize.Height - headerLayout.Padding.Vertical);
+                headerActionsLayout.MinimumSize = Size.Empty;
+                headerActionsLayout.MaximumSize = new Size(0, headerContentHeight);
+                headerActionsLayout.Height = headerContentHeight;
+                int commandContentHeight = Math.Max(1, commandLayout.ClientSize.Height - commandLayout.Padding.Top - (int)Math.Round(commandLayout.RowStyles[1].Height));
+                primaryActionsLayout.MinimumSize = Size.Empty;
+                primaryActionsLayout.MaximumSize = new Size(0, commandContentHeight);
+                primaryActionsLayout.Height = commandContentHeight;
+                contentLayout.Padding = new Padding(UiTheme.DpiPixels(this, compactHeight ? 10 : 14), UiTheme.DpiPixels(this, compactHeight ? 8 : 12), UiTheme.DpiPixels(this, compactHeight ? 10 : 14), UiTheme.DpiPixels(this, compactHeight ? 8 : 12));
+
+                summaryCardsLayout.MinimumSize = new Size(0, summaryHeight);
+                summaryCardsLayout.Height = summaryHeight;
+                summaryCardsLayout.SuspendLayout();
+                summaryCardsLayout.ColumnStyles.Clear();
+                summaryCardsLayout.RowStyles.Clear();
+                summaryCardsLayout.ColumnCount = columnCount;
+                summaryCardsLayout.RowCount = rowCount;
+                for (int column = 0; column < columnCount; column++) summaryCardsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / columnCount));
+                for (int row = 0; row < rowCount; row++) summaryCardsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / rowCount));
+                for (int index = 0; index < summaryCards.Length; index++)
+                {
+                    summaryCardsLayout.SetColumn(summaryCards[index], index % columnCount);
+                    summaryCardsLayout.SetRow(summaryCards[index], index / columnCount);
+                }
+                summaryCardsLayout.ResumeLayout(true);
+                contentLayout.SuspendLayout();
+                contentLayout.RowStyles.Clear();
+                contentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, summaryHeight));
+                contentLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.DpiPixels(this, compactHeight ? 38 : 46)));
+                contentLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                contentLayout.ResumeLayout(true);
+                contentLayout.PerformLayout();
+                summaryCardsLayout.PerformLayout();
+                if (contentLayout.Parent != null) contentLayout.Parent.PerformLayout();
+
+                int available = Math.Max(1, contentSplit.Width - contentSplit.SplitterWidth);
+                int availableLogical = UiTheme.LogicalPixels(this, available);
+                if (availableLogical < 480) return;
+                int splitterLogical = UiTheme.LogicalPixels(this, contentSplit.SplitterWidth);
+                int detailWidth = availableLogical < 760 ? 190 : Math.Min(245, Math.Max(190, availableLogical / 3));
+                int panel2Minimum = detailWidth;
+                int panel1Minimum = Math.Min(500, Math.Max(280, availableLogical - detailWidth - splitterLogical));
+                contentSplit.Panel2MinSize = UiTheme.DpiPixels(this, panel2Minimum);
+                contentSplit.Panel1MinSize = UiTheme.DpiPixels(this, panel1Minimum);
+                int minimum = contentSplit.Panel1MinSize;
+                int maximum = Math.Max(minimum, available - contentSplit.Panel2MinSize);
+                int preferred = Math.Max(minimum, available - UiTheme.DpiPixels(this, detailWidth));
+                contentSplit.SplitterDistance = Math.Max(minimum, Math.Min(maximum, preferred));
+            }
+            finally { applyingResponsiveLayout = false; }
         }
 
         private Control BuildNavigation()
@@ -4883,7 +5112,7 @@ namespace RogueCleanerV2
 
         private Control CreateSummaryCard(string title, Label valueLabel, Color color, string note)
         {
-            SummaryCardPanel card = new SummaryCardPanel { Dock = DockStyle.Top, Height = 44, MinimumSize = new Size(0, 44), MaximumSize = new Size(0, 44), Margin = new Padding(0, 0, 10, 0), Padding = new Padding(0) };
+            SummaryCardPanel card = new SummaryCardPanel { Dock = DockStyle.Fill, MinimumSize = new Size(0, 44), Margin = new Padding(0, 0, 10, 0), Padding = new Padding(0) };
             valueLabel.Text = "0";
             valueLabel.AutoSize = false;
             valueLabel.BackColor = Color.Transparent;
@@ -4900,9 +5129,14 @@ namespace RogueCleanerV2
             {
                 int width = Math.Max(1, card.ClientSize.Width);
                 int height = Math.Max(1, card.ClientSize.Height);
-                valueLabel.SetBounds(8, 7, 42, Math.Max(24, height - 9));
-                titleLabel.SetBounds(56, 1, Math.Max(1, width - 62), 18);
-                noteLabel.SetBounds(56, 20, Math.Max(1, width - 62), 18);
+                int left = UiTheme.DpiPixels(this, 8);
+                int valueWidth = UiTheme.DpiPixels(this, 42);
+                int textLeft = UiTheme.DpiPixels(this, 56);
+                int top = UiTheme.DpiPixels(this, 7);
+                int titleHeight = UiTheme.DpiPixels(this, 18);
+                valueLabel.SetBounds(left, top, valueWidth, Math.Max(UiTheme.DpiPixels(this, 24), height - UiTheme.DpiPixels(this, 9)));
+                titleLabel.SetBounds(textLeft, UiTheme.DpiPixels(this, 1), Math.Max(1, width - UiTheme.DpiPixels(this, 62)), titleHeight);
+                noteLabel.SetBounds(textLeft, UiTheme.DpiPixels(this, 20), Math.Max(1, width - UiTheme.DpiPixels(this, 62)), titleHeight);
             };
             card.SizeChanged += delegate { layout(); };
             layout();
@@ -4993,12 +5227,53 @@ namespace RogueCleanerV2
             if (e.ColumnIndex == 0) ToggleRowSelection(e.RowIndex);
         }
 
+        private void GridMouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right) return;
+            DataGridView.HitTestInfo hit = grid.HitTest(e.X, e.Y);
+            if (hit.RowIndex < 0 || hit.RowIndex >= grid.Rows.Count) return;
+            grid.ClearSelection();
+            grid.Rows[hit.RowIndex].Selected = true;
+            grid.CurrentCell = grid.Rows[hit.RowIndex].Cells[Math.Max(0, hit.ColumnIndex)];
+            ContextMenuStrip menu = new ContextMenuStrip();
+            menu.Items.Add("加入/移除本地白名单", null, delegate { ToggleCurrentWhitelist(); });
+            menu.Show(grid, new Point(e.X, e.Y));
+        }
+
         private void ShowFeedbackForRow(int rowIndex)
         {
             if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return;
             Finding finding = grid.Rows[rowIndex].DataBoundItem as Finding;
             if (finding == null) return;
             using (FeedbackForm form = new FeedbackForm(store, finding)) form.ShowDialog(this);
+        }
+
+        private void ToggleCurrentWhitelist()
+        {
+            Finding finding = grid.CurrentRow == null ? null : grid.CurrentRow.DataBoundItem as Finding;
+            if (finding == null)
+            {
+                int count = UserWhitelistStore.Load(store).Count;
+                MessageBox.Show(this, "当前白名单共有 " + count + " 项。请在结果表中右键项目后选择“加入/移除本地白名单”。", "本地白名单", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            bool listed = UserWhitelistStore.Load(store).Any(delegate(UserWhitelistEntry entry) { return string.Equals(entry.Key, UserWhitelistStore.KeyFor(finding), StringComparison.OrdinalIgnoreCase); });
+            if (listed)
+            {
+                if (MessageBox.Show(this, "移除“" + finding.UserVisibleName + "”的本地白名单？下次扫描将按普通规则重新判断。", "移除白名单", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                UserWhitelistStore.Remove(store, finding);
+                statusLabel.Text = "已移除白名单；请重新扫描以恢复正常判断。";
+                return;
+            }
+            if (MessageBox.Show(this, "将“" + finding.UserVisibleName + "”加入本地白名单？\n\n程序仍会在下次扫描中保留证据展示，但不会建议处理或参与批量清理。", "加入白名单", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+            if (UserWhitelistStore.Add(store, finding))
+            {
+                UserWhitelistStore.Apply(store, new Finding[] { finding });
+                grid.Refresh();
+                UpdateSummary();
+                UpdateDetails();
+                statusLabel.Text = "已加入本地白名单；证据保留，项目不会参与清理。";
+            }
         }
 
         private void ShowFeedbackForCurrentRow()
@@ -5352,6 +5627,7 @@ namespace RogueCleanerV2
         private void ReplaceRows(IEnumerable<Finding> findings)
         {
             List<Finding> materialized = findings == null ? new List<Finding>() : findings.ToList();
+            UserWhitelistStore.Apply(store, materialized);
             foreach (Finding finding in materialized)
             {
                 if (finding.SoftwareIcon == null) finding.SoftwareIcon = SoftwarePresentationResolver.PlaceholderIcon;
@@ -5720,7 +5996,10 @@ namespace RogueCleanerV2
         {
             Text = "恢复中心";
             Size = new Size(1060, 680);
-            MinimumSize = new Size(980, 620);
+            // Keep the recovery workflow usable on a 1080p screen at 200%.
+            // The existing body and footer still retain a useful list/grid area at
+            // this logical size, instead of Windows forcing the bottom off screen.
+            MinimumSize = new Size(900, 500);
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
             BackColor = Color.FromArgb(241, 245, 249);

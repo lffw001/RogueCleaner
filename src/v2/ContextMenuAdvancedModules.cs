@@ -642,23 +642,43 @@ namespace RogueCleanerV2
     {
         private readonly DataStore store; private readonly BindingList<AdvancedMenuEntry> rows = new BindingList<AdvancedMenuEntry>(); private readonly DataGridView grid = new BufferedDataGridView();
         private readonly ComboBox module = new ComboBox(); private readonly Label status = new Label(); private readonly Button refresh = new Button(); private readonly Button enable = new Button(); private readonly Button disable = new Button(); private readonly Button edit = new Button(); private readonly Button add = new Button(); private readonly Button delete = new Button(); private readonly Button up = new Button(); private readonly Button down = new Button();
+        private readonly TableLayoutPanel rootLayout = new TableLayoutPanel(); private readonly TableLayoutPanel toolsLayout = new TableLayoutPanel();
         private AdvancedMenuInventory inventory;
+        private bool applyingResponsiveLayout;
 
         public AdvancedContextMenuForm(DataStore store)
         {
-            this.store = store; Text = "高级右键兼容"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(1020, 640); Size = new Size(1220, 720); BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this); BuildUi(); Shown += delegate { RefreshRows(); };
+            this.store = store; Text = "高级右键兼容"; StartPosition = FormStartPosition.CenterParent; MinimumSize = new Size(900, 500); Size = new Size(1160, 700); AutoScaleMode = AutoScaleMode.Dpi; BackColor = UiTheme.Canvas; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this); BuildUi(); Shown += delegate { ApplyResponsiveLayout(); RefreshRows(); };
         }
 
         private void BuildUi()
         {
-            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, ColumnCount = 1, Padding = new Padding(18) }; root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); Controls.Add(root);
-            root.Controls.Add(UiTheme.ModuleHeader("系统右键高级功能", "管理系统快捷菜单、Windows 11 现代菜单、IE 旧式菜单和安全增强入口"), 0, 0);
-            FlowLayoutPanel filter = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = UiTheme.Surface, Padding = new Padding(8, 6, 8, 6) }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 205; module.Items.AddRange(new object[] { "全部模块", "系统快捷菜单", "Windows 现代菜单", "IE 旧式菜单", "安全增强菜单" }); module.SelectedIndex = 0; filter.Controls.Add(new Label { Text = "显示模块", AutoSize = true, ForeColor = UiTheme.Muted, Margin = new Padding(0, 5, 10, 0) }); filter.Controls.Add(module); root.Controls.Add(filter, 0, 1);
-            FlowLayoutPanel bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Padding = new Padding(0, 7, 0, 7) }; UiTheme.ToolButton(refresh, "刷新列表", SystemIcons.Information); UiTheme.ToolButton(enable, "显示或安装", SystemIcons.Shield); UiTheme.ToolButton(disable, "隐藏或移除", SystemIcons.Warning); UiTheme.ToolButton(edit, "修改项目", SystemIcons.Application); UiTheme.ToolButton(add, "添加旧式菜单", SystemIcons.Information); UiTheme.ToolButton(delete, "删除项目", SystemIcons.Error); UiTheme.ToolButton(up, "向上移动", SystemIcons.Application); UiTheme.ToolButton(down, "向下移动", SystemIcons.Application);
-            foreach (Control c in new Control[] { refresh, enable, disable, edit, add, delete, up, down }) bar.Controls.Add(c); root.Controls.Add(bar, 0, 2);
+            rootLayout.Dock = DockStyle.Fill; rootLayout.RowCount = 5; rootLayout.ColumnCount = 1; rootLayout.Padding = new Padding(18); rootLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); Controls.Add(rootLayout);
+            rootLayout.Controls.Add(UiTheme.ModuleHeader("系统右键高级功能", "管理系统快捷菜单、Windows 11 现代菜单、IE 旧式菜单和安全增强入口"), 0, 0);
+            FlowLayoutPanel filter = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, BackColor = UiTheme.Surface, Padding = new Padding(8, 6, 8, 6) }; module.DropDownStyle = ComboBoxStyle.DropDownList; module.Width = 205; module.Items.AddRange(new object[] { "全部模块", "系统快捷菜单", "Windows 现代菜单", "IE 旧式菜单", "安全增强菜单" }); module.SelectedIndex = 0; filter.Controls.Add(new Label { Text = "显示模块", AutoSize = true, ForeColor = UiTheme.Muted, Margin = new Padding(0, 5, 10, 0) }); filter.Controls.Add(module); rootLayout.Controls.Add(filter, 0, 1);
+            toolsLayout.Dock = DockStyle.Fill; toolsLayout.RowCount = 2; toolsLayout.ColumnCount = 4; toolsLayout.Padding = new Padding(0, 7, 0, 7); for (int i = 0; i < 4; i++) toolsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F)); toolsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); toolsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); UiTheme.ToolButton(refresh, "刷新列表", SystemIcons.Information); UiTheme.ToolButton(enable, "显示或安装", SystemIcons.Shield); UiTheme.ToolButton(disable, "隐藏或移除", SystemIcons.Warning); UiTheme.ToolButton(edit, "修改项目", SystemIcons.Application); UiTheme.ToolButton(add, "添加旧式菜单", SystemIcons.Information); UiTheme.ToolButton(delete, "删除项目", SystemIcons.Error); UiTheme.ToolButton(up, "向上移动", SystemIcons.Application); UiTheme.ToolButton(down, "向下移动", SystemIcons.Application);
+            Button[] tools = new Button[] { refresh, enable, disable, edit, add, delete, up, down }; for (int i = 0; i < tools.Length; i++) { Button tool = tools[i]; tool.AutoSize = false; tool.Dock = DockStyle.Fill; tool.Margin = new Padding(0, 0, i % 4 == 3 ? 0 : 7, 0); toolsLayout.Controls.Add(tool, i % 4, i / 4); } rootLayout.Controls.Add(toolsLayout, 0, 2);
             grid.Dock = DockStyle.Fill; grid.AutoGenerateColumns = false; grid.DataSource = rows; grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.RowHeadersVisible = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; grid.BackgroundColor = UiTheme.Surface;
-            grid.RowTemplate.Height = 34; grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "SoftwareIcon", HeaderText = "", Width = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ImageLayout = DataGridViewImageCellLayout.Normal }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 145 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SoftwareName", HeaderText = "关联软件", FillWeight = 110 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ModuleDisplay", HeaderText = "模块", FillWeight = 95 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 190 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); Panel gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface }; UiTheme.AttachModernScrollBar(gridHost, grid); root.Controls.Add(gridHost, 0, 3); status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; root.Controls.Add(status, 0, 4);
-            refresh.Click += delegate { RefreshRows(); }; module.SelectedIndexChanged += delegate { ApplyFilter(); }; grid.SelectionChanged += delegate { UpdateActions(); }; enable.Click += delegate { Toggle(true); }; disable.Click += delegate { Toggle(false); }; delete.Click += delegate { DeleteCurrent(); }; edit.Click += delegate { EditCurrent(); }; add.Click += delegate { EditIe(null); }; up.Click += delegate { MoveSelected(-1); }; down.Click += delegate { MoveSelected(1); };
+            grid.RowTemplate.Height = 34; grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "SoftwareIcon", HeaderText = "", Width = 42, AutoSizeMode = DataGridViewAutoSizeColumnMode.None, ImageLayout = DataGridViewImageCellLayout.Normal }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "状态", FillWeight = 55 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "名称", FillWeight = 145 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SoftwareName", HeaderText = "关联软件", FillWeight = 110 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ModuleDisplay", HeaderText = "模块", FillWeight = 95 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Detail", HeaderText = "详情", FillWeight = 190 }); grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Scope", HeaderText = "范围", FillWeight = 90 }); Panel gridHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Surface }; UiTheme.AttachModernScrollBar(gridHost, grid); rootLayout.Controls.Add(gridHost, 0, 3); status.Dock = DockStyle.Fill; status.ForeColor = UiTheme.Muted; rootLayout.Controls.Add(status, 0, 4);
+            refresh.Click += delegate { RefreshRows(); }; module.SelectedIndexChanged += delegate { ApplyFilter(); }; grid.SelectionChanged += delegate { UpdateActions(); }; enable.Click += delegate { Toggle(true); }; disable.Click += delegate { Toggle(false); }; delete.Click += delegate { DeleteCurrent(); }; edit.Click += delegate { EditCurrent(); }; add.Click += delegate { EditIe(null); }; up.Click += delegate { MoveSelected(-1); }; down.Click += delegate { MoveSelected(1); }; SizeChanged += delegate { ApplyResponsiveLayout(); }; toolsLayout.SizeChanged += delegate { ApplyResponsiveLayout(); };
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            if (applyingResponsiveLayout || rootLayout.IsDisposed || toolsLayout.IsDisposed || rootLayout.ClientSize.Width <= 0) return;
+            applyingResponsiveLayout = true;
+            try
+            {
+                int rowHeight = UiTheme.DpiPixels(this, 34);
+                int required = UiTheme.DpiPixels(this, 82);
+                toolsLayout.RowStyles[0].Height = rowHeight;
+                toolsLayout.RowStyles[1].Height = rowHeight;
+                rootLayout.RowStyles[2].Height = required;
+                toolsLayout.MinimumSize = new Size(0, required);
+                toolsLayout.Height = required;
+                rootLayout.PerformLayout();
+            }
+            finally { applyingResponsiveLayout = false; }
         }
 
         private static void ButtonStyle(Button button, string text, Color color) { UiTheme.OutlineButton(button, text, color); }
@@ -687,11 +707,20 @@ namespace RogueCleanerV2
         public string MenuName { get { return name.Text.Trim(); } } public string Url { get { return url.Text.Trim(); } } public int Contexts { get { return Convert.ToInt32(contexts.Value); } }
         public IeMenuEditorForm(AdvancedMenuEntry entry)
         {
-            Text = entry == null ? "添加 IE 旧式菜单" : "编辑 IE 旧式菜单"; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(680, 270); BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this);
-            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(22) }; root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); for (int i = 0; i < 3; i++) root.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); Controls.Add(root);
-            root.Controls.Add(new Label { Text = "菜单名称", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0); root.Controls.Add(name, 1, 0); root.Controls.Add(new Label { Text = "脚本或页面地址", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1); root.Controls.Add(url, 1, 1); root.Controls.Add(new Label { Text = "适用位置代码", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2); contexts.Maximum = int.MaxValue; root.Controls.Add(contexts, 1, 2); name.Dock = url.Dock = contexts.Dock = DockStyle.Fill; name.Margin = url.Margin = contexts.Margin = new Padding(0, 10, 0, 10);
+            Text = entry == null ? "添加 IE 旧式菜单" : "编辑 IE 旧式菜单"; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(720, 320); MinimumSize = Size; AutoScaleMode = AutoScaleMode.Dpi; BackColor = UiTheme.Surface; Font = UiTheme.Font(9F, FontStyle.Regular); UiTheme.ApplyWindowIdentity(this);
+            TableLayoutPanel root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(22) }; root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); for (int i = 0; i < 4; i++) root.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); Controls.Add(root);
+            root.Controls.Add(new Label { Text = "菜单名称", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0); root.Controls.Add(FieldCard(name), 1, 0); root.Controls.Add(new Label { Text = "脚本或页面地址", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1); root.Controls.Add(FieldCard(url), 1, 1); root.Controls.Add(new Label { Text = "适用位置代码", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2); contexts.Maximum = int.MaxValue; root.Controls.Add(FieldCard(contexts), 1, 2);
             if (entry != null) { name.Text = entry.Name; url.Text = entry.Detail; contexts.Value = Math.Max(0, entry.Contexts); }
             FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft }; Button cancel = new Button(); UiTheme.OutlineButton(cancel, "取消", UiTheme.Muted); cancel.DialogResult = DialogResult.Cancel; Button ok = new Button(); UiTheme.PrimaryButton(ok, "保存", UiTheme.Primary); ok.Click += delegate { if (string.IsNullOrWhiteSpace(name.Text) || string.IsNullOrWhiteSpace(url.Text)) { MessageBox.Show(this, "名称和地址不能为空。", Text, MessageBoxButtons.OK, MessageBoxIcon.Information); return; } DialogResult = DialogResult.OK; }; actions.Controls.Add(cancel); actions.Controls.Add(ok); root.Controls.Add(actions, 1, 3); AcceptButton = ok; CancelButton = cancel;
+        }
+
+        private static CardPanel FieldCard(Control field)
+        {
+            CardPanel host = new CardPanel { Dock = DockStyle.Fill, Margin = new Padding(0, 10, 0, 10) };
+            field.Dock = DockStyle.Fill;
+            field.Margin = Padding.Empty;
+            host.Controls.Add(field);
+            return host;
         }
     }
 

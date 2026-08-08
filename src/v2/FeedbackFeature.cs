@@ -292,6 +292,10 @@ namespace RogueCleanerV2
         private readonly Button githubButton = new Button();
         private readonly Button localButton = new Button();
         private readonly Button closeButton = new Button();
+        private readonly TableLayoutPanel rootLayout = new TableLayoutPanel();
+        private readonly FlowLayoutPanel typeOptions = new FlowLayoutPanel();
+        private readonly FlowLayoutPanel actionButtons = new FlowLayoutPanel();
+        private bool applyingResponsiveLayout;
 
         public FeedbackForm(DataStore store, Finding finding)
         {
@@ -306,34 +310,40 @@ namespace RogueCleanerV2
         {
             Text = "反馈识别问题";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(780, 650);
-            Size = new Size(920, 740);
             AutoScaleMode = AutoScaleMode.Dpi;
+            // A 1920 x 1080 work area at 200% has about 960 x 540 logical pixels.
+            // Keep the whole feedback flow, including its submit actions, usable there.
+            MinimumSize = new Size(760, 500);
+            Size = new Size(920, 740);
             Font = UiTheme.Font(9F, FontStyle.Regular);
             BackColor = UiTheme.Canvas;
 
-            TableLayoutPanel root = new TableLayoutPanel();
-            root.Dock = DockStyle.Fill;
-            root.Padding = new Padding(20);
-            root.ColumnCount = 1;
-            root.RowCount = 6;
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 114));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-            Controls.Add(root);
+            rootLayout.Dock = DockStyle.Fill;
+            rootLayout.Padding = new Padding(16);
+            rootLayout.ColumnCount = 1;
+            rootLayout.RowCount = 6;
+            rootLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 114));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+            Controls.Add(rootLayout);
 
             Panel heading = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Canvas };
             Label title = new Label { Text = "反馈识别问题", Dock = DockStyle.Top, Height = 32, ForeColor = UiTheme.Text, Font = UiTheme.Font(15F, FontStyle.Bold) };
             Label privacy = new Label { Text = "只生成当前项目的脱敏报告，提交前由你检查；不会在后台直接发送。", Dock = DockStyle.Fill, ForeColor = UiTheme.Muted, Font = UiTheme.Font(8.5F, FontStyle.Regular) };
             heading.Controls.Add(privacy);
             heading.Controls.Add(title);
-            root.Controls.Add(heading, 0, 0);
+            rootLayout.Controls.Add(heading, 0, 0);
 
-            FlowLayoutPanel typeOptions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), Padding = new Padding(0, 8, 0, 8) };
+            typeOptions.Dock = DockStyle.Fill;
+            typeOptions.FlowDirection = FlowDirection.LeftToRight;
+            typeOptions.WrapContents = true;
+            typeOptions.AutoScroll = false;
+            typeOptions.Margin = new Padding(0);
+            typeOptions.Padding = new Padding(0, 6, 0, 6);
             StyleTypeOption(falsePositiveType, "误报", "正常软件被误判");
             StyleTypeOption(missedType, "漏报", "项目没有被识别");
             StyleTypeOption(identityType, "身份错误", "厂商或产品有误");
@@ -343,7 +353,7 @@ namespace RogueCleanerV2
             typeOptions.Controls.Add(missedType);
             typeOptions.Controls.Add(identityType);
             typeOptions.Controls.Add(relationType);
-            root.Controls.Add(typeOptions, 0, 1);
+            rootLayout.Controls.Add(typeOptions, 0, 1);
 
             CardPanel expectedCard = new CardPanel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(12, 9, 12, 10) };
             Label expectedTitle = new Label { Text = "你的判断", Dock = DockStyle.Top, Height = 25, ForeColor = UiTheme.Primary, Font = UiTheme.Font(9F, FontStyle.Bold) };
@@ -357,13 +367,13 @@ namespace RogueCleanerV2
             expectedBox.ForeColor = UiTheme.Text;
             expectedCard.Controls.Add(expectedBox);
             expectedCard.Controls.Add(expectedTitle);
-            root.Controls.Add(expectedCard, 0, 2);
+            rootLayout.Controls.Add(expectedCard, 0, 2);
 
             hashBox.Dock = DockStyle.Fill;
             hashBox.Text = "包含目标文件 SHA256（默认不包含，不上传文件）";
             hashBox.ForeColor = UiTheme.Muted;
             hashBox.Padding = new Padding(4, 0, 0, 0);
-            root.Controls.Add(hashBox, 0, 3);
+            rootLayout.Controls.Add(hashBox, 0, 3);
 
             CardPanel previewCard = new CardPanel { Dock = DockStyle.Fill, Margin = new Padding(0), Padding = new Padding(12, 9, 12, 10) };
             Label previewTitle = new Label { Text = "脱敏预览  ·  下面是将复制到公开 GitHub Issue 的全部内容", Dock = DockStyle.Top, Height = 27, ForeColor = UiTheme.Primary, Font = UiTheme.Font(9F, FontStyle.Bold) };
@@ -378,23 +388,23 @@ namespace RogueCleanerV2
             previewBox.Font = new Font("Consolas", 9F, FontStyle.Regular);
             previewCard.Controls.Add(previewBox);
             previewCard.Controls.Add(previewTitle);
-            root.Controls.Add(previewCard, 0, 4);
+            rootLayout.Controls.Add(previewCard, 0, 4);
 
-            FlowLayoutPanel buttons = new FlowLayoutPanel();
-            buttons.Dock = DockStyle.Fill;
-            buttons.FlowDirection = FlowDirection.RightToLeft;
-            buttons.WrapContents = false;
-            root.Controls.Add(buttons, 0, 5);
+            actionButtons.Dock = DockStyle.Fill;
+            actionButtons.FlowDirection = FlowDirection.RightToLeft;
+            actionButtons.WrapContents = false;
+            actionButtons.AutoScroll = false;
+            rootLayout.Controls.Add(actionButtons, 0, 5);
             UiTheme.OutlineButton(closeButton, "关闭", UiTheme.Muted);
             UiTheme.OutlineButton(localButton, "仅保存本地", UiTheme.Primary);
             UiTheme.PrimaryButton(githubButton, "复制并打开 GitHub", UiTheme.Primary);
             closeButton.MinimumSize = new Size(90, 40);
             localButton.MinimumSize = new Size(128, 40);
             githubButton.MinimumSize = new Size(188, 40);
-            closeButton.Margin = localButton.Margin = githubButton.Margin = new Padding(8, 9, 0, 0);
-            buttons.Controls.Add(closeButton);
-            buttons.Controls.Add(localButton);
-            buttons.Controls.Add(githubButton);
+            closeButton.Margin = localButton.Margin = githubButton.Margin = new Padding(8, 6, 0, 0);
+            actionButtons.Controls.Add(closeButton);
+            actionButtons.Controls.Add(localButton);
+            actionButtons.Controls.Add(githubButton);
 
             falsePositiveType.CheckedChanged += delegate { UpdatePreview(); };
             missedType.CheckedChanged += delegate { UpdatePreview(); };
@@ -405,6 +415,78 @@ namespace RogueCleanerV2
             closeButton.Click += delegate { Close(); };
             localButton.Click += delegate { SaveFeedback(false); };
             githubButton.Click += delegate { SaveFeedback(true); };
+            SizeChanged += delegate { ApplyResponsiveLayout(); };
+            rootLayout.SizeChanged += delegate { ApplyResponsiveLayout(); };
+            typeOptions.SizeChanged += delegate { ApplyResponsiveLayout(); };
+            Shown += delegate
+            {
+                FitToWorkingArea();
+                ApplyResponsiveLayout();
+            };
+        }
+
+        private void FitToWorkingArea()
+        {
+            try
+            {
+                int logicalWorkHeight = UiTheme.LogicalPixels(this, Screen.FromControl(this).WorkingArea.Height);
+                int maximumLogicalHeight = Math.Max(500, logicalWorkHeight - 16);
+                int maximumHeight = UiTheme.DpiPixels(this, maximumLogicalHeight);
+                if (Height > maximumHeight && maximumHeight >= MinimumSize.Height) Height = maximumHeight;
+            }
+            catch { }
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            if (applyingResponsiveLayout || rootLayout.IsDisposed || typeOptions.IsDisposed || typeOptions.ClientSize.Width <= 0) return;
+            applyingResponsiveLayout = true;
+            try
+            {
+                int logicalClientHeight = UiTheme.LogicalPixels(this, Math.Max(1, ClientSize.Height));
+                bool compact = logicalClientHeight <= 540;
+                int horizontalPadding = UiTheme.DpiPixels(this, compact ? 12 : 20);
+                int verticalPadding = UiTheme.DpiPixels(this, compact ? 10 : 20);
+                rootLayout.Padding = new Padding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
+                rootLayout.RowStyles[0].Height = UiTheme.DpiPixels(this, compact ? 58 : 64);
+                rootLayout.RowStyles[2].Height = UiTheme.DpiPixels(this, compact ? 100 : 114);
+                rootLayout.RowStyles[3].Height = UiTheme.DpiPixels(this, compact ? 32 : 42);
+                rootLayout.RowStyles[5].Height = UiTheme.DpiPixels(this, compact ? 54 : 58);
+
+                // At normal widths all four choices stay in one row.  Near the
+                // compact minimum they become two rows, and the table row grows
+                // with them so no choice is hidden behind a scroll bar.
+                int typePadding = UiTheme.DpiPixels(this, compact ? 4 : 8);
+                int typeGap = UiTheme.DpiPixels(this, 8);
+                typeOptions.Padding = new Padding(0, typePadding, 0, typePadding);
+                rootLayout.PerformLayout();
+                int logicalAvailableWidth = UiTheme.LogicalPixels(this, Math.Max(1, typeOptions.ClientSize.Width - typeOptions.Padding.Horizontal));
+                int columns = logicalAvailableWidth >= 820 ? 4 : logicalAvailableWidth >= 360 ? 2 : 1;
+                int logicalOptionWidth = Math.Max(160, (logicalAvailableWidth - columns * 8) / columns);
+                int optionWidth = UiTheme.DpiPixels(this, logicalOptionWidth);
+                int optionHeight = UiTheme.DpiPixels(this, compact ? 52 : 58);
+                ConfigureTypeOptionLayout(falsePositiveType, optionWidth, optionHeight, typeGap, compact);
+                ConfigureTypeOptionLayout(missedType, optionWidth, optionHeight, typeGap, compact);
+                ConfigureTypeOptionLayout(identityType, optionWidth, optionHeight, typeGap, compact);
+                ConfigureTypeOptionLayout(relationType, optionWidth, optionHeight, typeGap, compact);
+
+                int required = UiTheme.RequiredFlowLayoutHeight(typeOptions);
+                rootLayout.RowStyles[1].Height = Math.Max(UiTheme.DpiPixels(this, compact ? 62 : 78), required);
+                typeOptions.MinimumSize = new Size(0, required);
+                typeOptions.Height = required;
+                actionButtons.MinimumSize = new Size(0, UiTheme.DpiPixels(this, compact ? 46 : 50));
+                rootLayout.PerformLayout();
+            }
+            finally { applyingResponsiveLayout = false; }
+        }
+
+        private void ConfigureTypeOptionLayout(RadioButton option, int width, int height, int gap, bool compact)
+        {
+            option.MinimumSize = new Size(width, height);
+            option.MaximumSize = new Size(width, height);
+            option.Size = new Size(width, height);
+            option.Margin = new Padding(0, 0, gap, 0);
+            option.Padding = new Padding(UiTheme.DpiPixels(this, compact ? 10 : 12), 0, UiTheme.DpiPixels(this, 8), 0);
         }
 
         private void UpdatePreview()
