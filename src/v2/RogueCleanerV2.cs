@@ -27,15 +27,15 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("aakk007")]
 [assembly: AssemblyProduct("流氓软件克星")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 aakk007")]
-[assembly: AssemblyVersion("2.0.15.0")]
-[assembly: AssemblyFileVersion("2.0.15.0")]
+[assembly: AssemblyVersion("2.0.16.0")]
+[assembly: AssemblyFileVersion("2.0.16.0")]
 
 namespace RogueCleanerV2
 {
     internal static class AppMeta
     {
         public const string ProductName = "流氓软件克星";
-        public const string Version = "2.0.15";
+        public const string Version = "2.0.16";
         public const string AuthorName = "aakk007";
         public const string Author52PojieUrl = "https://www.52pojie.cn/home.php?mod=space&uid=286924";
         public const string AuthorGitHubUrl = "https://github.com/aakk007";
@@ -48,6 +48,17 @@ namespace RogueCleanerV2
 
     internal static class Program
     {
+        private const string SingleInstanceMutexName = @"Local\RogueCleanerV2.SingleInstance.4F7A1E02-3C0E-4F75-9C15-9E7A7E1D8A26";
+        private const int SW_RESTORE = 9;
+        private static Mutex singleInstanceMutex;
+        private static bool singleInstanceLockOwned;
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
         [STAThread]
         private static int Main(string[] args)
         {
@@ -84,6 +95,7 @@ namespace RogueCleanerV2
             bool identitySmoke = HasArg(args, "--identity-smoke");
             bool feedbackSmoke = HasArg(args, "--feedback-smoke");
             bool uiSmoke = HasArg(args, "--ui-smoke");
+            bool interactiveGuiLaunch = IsInteractiveGuiLaunch(args);
 #if VALIDATION
             bool acceptance = HasArg(args, "--acceptance-test");
             bool permissionSmoke = HasArg(args, "--permission-smoke");
@@ -91,6 +103,12 @@ namespace RogueCleanerV2
             bool specialMenuSmoke = HasArg(args, "--special-menu-smoke");
             bool advancedMenuSmoke = HasArg(args, "--advanced-menu-smoke");
 #endif
+
+            if (interactiveGuiLaunch && !TryEnterSingleInstance(HasArg(args, "--elevation-resume")))
+            {
+                Environment.ExitCode = 0;
+                return 0;
+            }
 
             try
             {
@@ -184,6 +202,10 @@ namespace RogueCleanerV2
                 Environment.ExitCode = 1;
                 return 1;
             }
+            finally
+            {
+                if (interactiveGuiLaunch) ReleaseSingleInstanceLock();
+            }
         }
 
         private static bool HasArg(string[] args, string name)
@@ -194,6 +216,151 @@ namespace RogueCleanerV2
                 if (string.Equals(arg, name, StringComparison.OrdinalIgnoreCase)) return true;
             }
             return false;
+        }
+
+        private static bool IsInteractiveGuiLaunch(string[] args)
+        {
+            string[] workerArgs = new string[]
+            {
+                "--copy-path",
+                "--context-title-probe",
+                "--scan-smoke",
+                "--vendor-review-smoke",
+                "--identity-smoke",
+                "--feedback-smoke",
+                "--ui-smoke",
+                "--acceptance-test",
+                "--permission-smoke",
+                "--context-menu-smoke",
+                "--special-menu-smoke",
+                "--advanced-menu-smoke"
+            };
+            foreach (string workerArg in workerArgs)
+            {
+                if (HasArg(args, workerArg)) return false;
+            }
+            return true;
+        }
+
+        private static bool TryEnterSingleInstance(bool waitForRelaunch)
+        {
+            try
+            {
+                bool createdNew;
+                singleInstanceMutex = new Mutex(false, SingleInstanceMutexName, out createdNew);
+                TimeSpan wait = waitForRelaunch ? TimeSpan.FromSeconds(8) : TimeSpan.Zero;
+                if (WaitForSingleInstanceLock(createdNew ? TimeSpan.Zero : wait))
+                {
+                    singleInstanceLockOwned = true;
+                    return true;
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                ActivateExistingMainWindow();
+                return false;
+            }
+            catch
+            {
+                ReleaseSingleInstanceLock();
+                return !ActivateExistingMainWindow();
+            }
+
+            ReleaseSingleInstanceLock();
+            ActivateExistingMainWindow();
+            return false;
+        }
+
+        private static bool WaitForSingleInstanceLock(TimeSpan wait)
+        {
+            try
+            {
+                return singleInstanceMutex != null && singleInstanceMutex.WaitOne(wait);
+            }
+            catch (AbandonedMutexException)
+            {
+                return true;
+            }
+        }
+
+        internal static void ReleaseSingleInstanceLock()
+        {
+            try
+            {
+                if (singleInstanceMutex != null && singleInstanceLockOwned) singleInstanceMutex.ReleaseMutex();
+            }
+            catch (ApplicationException)
+            {
+            }
+            finally
+            {
+                singleInstanceLockOwned = false;
+                if (singleInstanceMutex != null)
+                {
+                    singleInstanceMutex.Dispose();
+                    singleInstanceMutex = null;
+                }
+            }
+        }
+
+        private static bool ActivateExistingMainWindow()
+        {
+            string currentPath = string.Empty;
+            try { currentPath = Path.GetFullPath(Application.ExecutablePath); } catch { }
+            string processName = string.Empty;
+            try { processName = Process.GetCurrentProcess().ProcessName; } catch { }
+            if (string.IsNullOrWhiteSpace(processName)) return false;
+
+            for (int attempt = 0; attempt < 20; attempt++)
+            {
+                Process[] processes = null;
+                try
+                {
+                    processes = Process.GetProcessesByName(processName);
+                    foreach (Process process in processes)
+                    {
+                        if (!IsExistingInteractiveInstance(process, currentPath)) continue;
+                        IntPtr handle = process.MainWindowHandle;
+                        if (handle == IntPtr.Zero) continue;
+                        ShowWindowAsync(handle, SW_RESTORE);
+                        SetForegroundWindow(handle);
+                        return true;
+                    }
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    if (processes != null)
+                    {
+                        foreach (Process process in processes)
+                        {
+                            try { process.Dispose(); } catch { }
+                        }
+                    }
+                }
+                Thread.Sleep(100);
+            }
+            return false;
+        }
+
+        private static bool IsExistingInteractiveInstance(Process process, string currentPath)
+        {
+            try
+            {
+                if (process == null || process.Id == Process.GetCurrentProcess().Id || process.HasExited) return false;
+                string title = process.MainWindowTitle;
+                if (!string.IsNullOrWhiteSpace(title) && title.IndexOf(AppMeta.ProductName, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                string otherPath = null;
+                try { otherPath = Path.GetFullPath(process.MainModule.FileName); } catch { }
+                return !string.IsNullOrWhiteSpace(currentPath) && !string.IsNullOrWhiteSpace(otherPath) &&
+                    string.Equals(currentPath, otherPath, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 
@@ -687,6 +854,7 @@ namespace RogueCleanerV2
         Ignore,
         Governed,
         ReportOnly,
+        SystemProtected,
         ActionableExtension,
         ActionableCommand
     }
@@ -699,7 +867,8 @@ namespace RogueCleanerV2
             if (string.Equals(entry.Scene, "命令仓库", StringComparison.OrdinalIgnoreCase)) return ContextMenuDiagnosisDisposition.Ignore;
             bool extension = string.Equals(entry.Type, "Shell 扩展", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(entry.Type, "现代右键扩展", StringComparison.OrdinalIgnoreCase);
-            if (!extension && entry.AdvancedOnly && IsCoreFileTypeVerb(entry.SubKey)) return ContextMenuDiagnosisDisposition.Ignore;
+            if (!extension && IsCoreFileTypeVerb(entry.SubKey)) return ContextMenuDiagnosisDisposition.Ignore;
+            if (!extension && IsSystemCommand(entry)) return ContextMenuDiagnosisDisposition.SystemProtected;
             if (!entry.Enabled) return ContextMenuDiagnosisDisposition.Governed;
             if (entry.ReadOnly || (extension && string.IsNullOrWhiteSpace(entry.Clsid))) return ContextMenuDiagnosisDisposition.ReportOnly;
             return extension ? ContextMenuDiagnosisDisposition.ActionableExtension : ContextMenuDiagnosisDisposition.ActionableCommand;
@@ -712,6 +881,25 @@ namespace RogueCleanerV2
             string verb = (slash < 0 ? value : value.Substring(slash + 1)).Trim().ToLowerInvariant();
             return verb == "open" || verb == "edit" || verb == "print" || verb == "printto" || verb == "new" ||
                 verb == "runas" || verb == "runasuser" || verb == "play" || verb == "preview";
+        }
+
+        private static bool IsSystemCommand(ContextMenuEntry entry)
+        {
+            string command = (entry == null ? string.Empty : entry.Command ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(command)) return false;
+            string lowered = Environment.ExpandEnvironmentVariables(command).ToLowerInvariant();
+            string[] systemTokens = new string[]
+            {
+                @"\windows\system32\",
+                @"\windows\syswow64\",
+                @"\windows\system\",
+                @"\windows\explorer.exe"
+            };
+            foreach (string token in systemTokens)
+            {
+                if (lowered.IndexOf(token, StringComparison.Ordinal) >= 0) return true;
+            }
+            return false;
         }
     }
 
@@ -780,6 +968,7 @@ namespace RogueCleanerV2
         {
             if (string.Equals(status, "Done", StringComparison.OrdinalIgnoreCase)) return "已处理";
             if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase)) return "失败";
+            if (string.Equals(status, "RestoreFailed", StringComparison.OrdinalIgnoreCase)) return "恢复失败";
             if (string.Equals(status, "Launched", StringComparison.OrdinalIgnoreCase)) return "已打开卸载窗口";
             if (string.Equals(status, "Skipped", StringComparison.OrdinalIgnoreCase)) return "已跳过";
             return string.IsNullOrWhiteSpace(status) ? "未知" : status;
@@ -2146,6 +2335,14 @@ namespace RogueCleanerV2
                     list.Add(readOnly);
                     continue;
                 }
+                if (disposition == ContextMenuDiagnosisDisposition.SystemProtected)
+                {
+                    target.Kind = "ReportOnly";
+                    Finding protectedSystem = NewFinding("系统右键命令（保护）", title, "这是 Windows 系统自带的右键命令，命令路径指向系统目录。自动清理可能破坏右键菜单或系统设置，只提示不删除。", target, text, 5, identity, badComponent);
+                    protectedSystem.Risk = "低";
+                    list.Add(protectedSystem);
+                    continue;
+                }
 
                 if (disposition == ContextMenuDiagnosisDisposition.ActionableExtension)
                 {
@@ -3264,16 +3461,32 @@ namespace RogueCleanerV2
                 if (target.Kind == "DeleteRegistryKey")
                 {
                     result.Backup = BackupRegistry(batchPath, target);
-                    RegistryHelper.DeleteKey(target);
-                    result.Status = VerifyApplied(target) ? "Done" : "Failed";
-                    result.Message = result.Status == "Done" ? "注册表键已删除。" : "复核失败：注册表键仍然存在。";
+                    if (string.IsNullOrEmpty(result.Backup))
+                    {
+                        result.Status = "Failed";
+                        result.Message = "注册表备份失败，已取消删除，避免右键菜单或系统设置无法恢复。";
+                    }
+                    else
+                    {
+                        RegistryHelper.DeleteKey(target);
+                        result.Status = VerifyApplied(target) ? "Done" : "Failed";
+                        result.Message = result.Status == "Done" ? "注册表键已删除。" : "复核失败：注册表键仍然存在。";
+                    }
                 }
                 else if (target.Kind == "DeleteRegistryValue")
                 {
                     result.Backup = BackupRegistry(batchPath, target);
-                    RegistryHelper.DeleteValue(target);
-                    result.Status = VerifyApplied(target) ? "Done" : "Failed";
-                    result.Message = result.Status == "Done" ? "注册表值已删除。" : "复核失败：注册表值仍然存在。";
+                    if (string.IsNullOrEmpty(result.Backup))
+                    {
+                        result.Status = "Failed";
+                        result.Message = "注册表备份失败，已取消删除，避免右键菜单或系统设置无法恢复。";
+                    }
+                    else
+                    {
+                        RegistryHelper.DeleteValue(target);
+                        result.Status = VerifyApplied(target) ? "Done" : "Failed";
+                        result.Message = result.Status == "Done" ? "注册表值已删除。" : "复核失败：注册表值仍然存在。";
+                    }
                 }
                 else if (target.Kind == "DisableShellExtension")
                 {
@@ -3288,14 +3501,19 @@ namespace RogueCleanerV2
                 else if (target.Kind == "MoveFileToBackup")
                 {
                     string src = Environment.ExpandEnvironmentVariables(target.FilePath ?? string.Empty);
-                    if (File.Exists(src))
+                    if (!File.Exists(src))
+                    {
+                        result.Status = "Failed";
+                        result.Message = "要移动的源文件不存在，已跳过，避免误报成功。";
+                    }
+                    else
                     {
                         string dest = Path.Combine(Path.Combine(batchPath, "files"), Path.GetFileName(src));
                         File.Move(src, dest);
                         result.Backup = dest;
+                        result.Status = VerifyApplied(target) ? "Done" : "Failed";
+                        result.Message = result.Status == "Done" ? "文件已移动到备份。" : "复核失败：文件仍然存在。";
                     }
-                    result.Status = VerifyApplied(target) ? "Done" : "Failed";
-                    result.Message = result.Status == "Done" ? "文件已移动到备份。" : "复核失败：文件仍然存在。";
                 }
                 else if (target.Kind == "DisableService")
                 {
@@ -3385,11 +3603,42 @@ namespace RogueCleanerV2
                 summary.Total++;
                 string message;
                 bool ok = RestoreResult(batch, result, out message);
-                if (ok) summary.Succeeded++;
-                else summary.Failed++;
+                if (ok)
+                {
+                    summary.Succeeded++;
+                    if (result != null)
+                    {
+                        result.Status = "Restored";
+                        result.Message = message;
+                    }
+                }
+                else
+                {
+                    summary.Failed++;
+                    if (result != null)
+                    {
+                        result.Status = "RestoreFailed";
+                        result.Message = message;
+                    }
+                }
                 if (!string.IsNullOrWhiteSpace(message)) summary.Messages.Add(message);
             }
             return summary;
+        }
+
+        public void RewriteBatchManifest(CleanupBatch batch)
+        {
+            if (batch == null || string.IsNullOrWhiteSpace(batch.Path) || batch.Results == null) return;
+            batch.Results = batch.Results.Where(delegate(CleanupResult r)
+            {
+                return r == null || !string.Equals(r.Status, "Restored", StringComparison.OrdinalIgnoreCase);
+            }).ToList();
+            if (batch.Results.Count == 0)
+            {
+                DeleteBatchRecord(batch);
+                return;
+            }
+            WriteJson(Path.Combine(batch.Path, "manifest.json"), batch);
         }
 
         public bool RestoreResult(CleanupResult result, out string message)
@@ -3405,7 +3654,8 @@ namespace RogueCleanerV2
                 message = "空恢复项，已跳过。";
                 return true;
             }
-            if (!string.Equals(result.Status, "Done", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(result.Status, "Done", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(result.Status, "RestoreFailed", StringComparison.OrdinalIgnoreCase))
             {
                 message = result.Title + "：原清理结果为 " + result.Status + "，无需恢复。";
                 return true;
@@ -4002,6 +4252,136 @@ namespace RogueCleanerV2
         }
     }
 
+    internal static class Issue8RegressionChecks
+    {
+        public static List<ValidationCaseResult> Run(DataStore store)
+        {
+            List<ValidationCaseResult> results = new List<ValidationCaseResult>();
+            results.Add(CheckBackupFailureAbortsDelete(store));
+            results.Add(CheckPartialRestoreRewritesManifest(store));
+            results.Add(CheckCoreVerbAndSystemCommandProtection());
+            return results;
+        }
+
+        private static ValidationCaseResult NewResult(string name, string area, string needle, bool pass, string message)
+        {
+            return new ValidationCaseResult
+            {
+                Name = name,
+                Vendor = "Issue8",
+                Area = area,
+                Needle = needle,
+                SetupSucceeded = true,
+                SetupMessage = "纯内存/临时批次回归，不依赖模拟工件。",
+                Result = pass ? "Pass" : "Fail",
+                Message = message
+            };
+        }
+
+        private static ValidationCaseResult CheckBackupFailureAbortsDelete(DataStore store)
+        {
+            try
+            {
+                string missingKey = @"Software\CodexRogueCleanerTest\MissingBackupKeyGuard_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                Finding finding = new Finding
+                {
+                    Id = 9001,
+                    UserVisibleName = "备份失败保护测试",
+                    Vendor = "Issue8",
+                    Category = "回归测试",
+                    ActionKind = "DeleteRegistryKey",
+                    TechnicalLocation = @"HKCU\" + missingKey,
+                    Target = new ActionTarget { Kind = "DeleteRegistryKey", Hive = "HKCU", SubKey = missingKey },
+                    Selected = true
+                };
+                CleanerEngine cleaner = new CleanerEngine(store);
+                CleanupBatch batch = cleaner.Clean(new List<Finding> { finding });
+                CleanupResult result = batch.Results.Count > 0 ? batch.Results[0] : null;
+                bool pass = result != null &&
+                    string.Equals(result.Status, "Failed", StringComparison.OrdinalIgnoreCase) &&
+                    (result.Message ?? string.Empty).IndexOf("备份失败", StringComparison.Ordinal) >= 0;
+                try { cleaner.DeleteBatchRecord(batch); } catch { }
+                return NewResult("注册表备份失败时必须取消删除", "恢复保护", "BackupFailAbort",
+                    pass,
+                    pass ? "reg export 失败（目标键不存在）时，清理结果为 Failed 且消息提示备份失败，未执行删除。"
+                         : "备份失败仍继续删除：Status=" + (result == null ? "null" : result.Status) + ", Message=" + (result == null ? "null" : result.Message));
+            }
+            catch (Exception ex)
+            {
+                return NewResult("注册表备份失败时必须取消删除", "恢复保护", "BackupFailAbort", false, "异常：" + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        private static ValidationCaseResult CheckPartialRestoreRewritesManifest(DataStore store)
+        {
+            try
+            {
+                string id = "issue8-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string batchPath = Path.Combine(store.Backups, id);
+                Directory.CreateDirectory(batchPath);
+                CleanupBatch batch = new CleanupBatch
+                {
+                    Id = id,
+                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Path = batchPath,
+                    Results = new List<CleanupResult>
+                    {
+                        new CleanupResult { Id = 1, Title = "无需恢复项", Status = "Skipped", Message = "未执行。", Target = new ActionTarget { Kind = "ReportOnly" } },
+                        new CleanupResult { Id = 2, Title = "无备份失败项", Status = "Done", Message = "注册表键已删除。", Target = new ActionTarget { Kind = "DeleteRegistryKey", Hive = "HKCU", SubKey = @"Software\CodexRogueCleanerTest\MissingRestoreBackupGuard_" + Guid.NewGuid().ToString("N").Substring(0, 8) } }
+                    }
+                };
+                CleanerEngine.WriteJson(Path.Combine(batchPath, "manifest.json"), batch);
+                CleanerEngine cleaner = new CleanerEngine(store);
+                RestoreBatchResult summary = cleaner.RestoreBatch(batch);
+                bool summaryOk = summary.Total == 2 && summary.Succeeded == 1 && summary.Failed == 1;
+                cleaner.RewriteBatchManifest(batch);
+                bool memoryOk = batch.Results != null && batch.Results.Count == 1 &&
+                    string.Equals(batch.Results[0].Status, "RestoreFailed", StringComparison.OrdinalIgnoreCase);
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                CleanupBatch onDisk = serializer.Deserialize<CleanupBatch>(File.ReadAllText(Path.Combine(batchPath, "manifest.json"), Encoding.UTF8));
+                bool diskOk = onDisk != null && onDisk.Results != null && onDisk.Results.Count == 1 &&
+                    string.Equals(onDisk.Results[0].Status, "RestoreFailed", StringComparison.OrdinalIgnoreCase);
+                bool pass = summaryOk && memoryOk && diskOk;
+                try { cleaner.DeleteBatchRecord(batch); } catch { }
+                return NewResult("恢复部分失败时回写清单并只保留失败项", "恢复中心", "PartialRestoreManifest",
+                    pass,
+                    pass ? "2 项批次恢复 1 成功 1 失败，manifest 回写后仅保留 1 个 RestoreFailed 项，可再次尝试。"
+                         : "Summary=" + summary.Total + "/" + summary.Succeeded + "/" + summary.Failed + ", MemoryCount=" + (batch.Results == null ? -1 : batch.Results.Count) + ", DiskCount=" + (onDisk == null || onDisk.Results == null ? -1 : onDisk.Results.Count));
+            }
+            catch (Exception ex)
+            {
+                return NewResult("恢复部分失败时回写清单并只保留失败项", "恢复中心", "PartialRestoreManifest", false, "异常：" + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        private static ValidationCaseResult CheckCoreVerbAndSystemCommandProtection()
+        {
+            try
+            {
+                VendorIdentityResult confirmed = new VendorIdentityResult { Confirmed = true, Conflicted = false, Vendor = "Issue8" };
+                ContextMenuEntry coreVerb = new ContextMenuEntry { Scene = "所有文件", Type = "Shell 命令", SubKey = @"Software\Classes\*\shell\open", AdvancedOnly = false, Enabled = true, Command = "\"%1\"" };
+                ContextMenuDiagnosisDisposition coreDisp = ContextMenuDiagnosisPolicy.Classify(coreVerb, confirmed);
+                bool coreProtected = coreDisp == ContextMenuDiagnosisDisposition.Ignore;
+                ContextMenuEntry systemCmd = new ContextMenuEntry { Scene = "文件夹背景", Type = "Shell 命令", SubKey = @"Software\Classes\Directory\Background\shell\cmd", AdvancedOnly = false, Enabled = true, Command = @"%SystemRoot%\System32\cmd.exe /s /k pushd %V" };
+                ContextMenuDiagnosisDisposition sysDisp = ContextMenuDiagnosisPolicy.Classify(systemCmd, confirmed);
+                bool sysProtected = sysDisp == ContextMenuDiagnosisDisposition.SystemProtected;
+                ContextMenuEntry thirdParty = new ContextMenuEntry { Scene = "所有文件", Type = "Shell 命令", SubKey = @"Software\Classes\*\shell\CodexRogueCleanerTest_WPS", AdvancedOnly = false, Enabled = true, Command = @"C:\Program Files\Kingsoft\WPS Office\wps.exe" };
+                ContextMenuDiagnosisDisposition thirdDisp = ContextMenuDiagnosisPolicy.Classify(thirdParty, confirmed);
+                bool thirdActionable = thirdDisp == ContextMenuDiagnosisDisposition.ActionableCommand;
+                bool pass = coreProtected && sysProtected && thirdActionable;
+                return NewResult("核心动词与系统命令保护", "右键菜单", "CoreVerbSystemGuard",
+                    pass,
+                    pass ? "open 核心动词被 Ignore，system32 命令为 SystemProtected，第三方命令仍可 ActionableCommand。"
+                         : "core=" + coreDisp + ", sys=" + sysDisp + ", third=" + thirdDisp);
+            }
+            catch (Exception ex)
+            {
+                return NewResult("核心动词与系统命令保护", "右键菜单", "CoreVerbSystemGuard", false, "异常：" + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+    }
+
     internal static class ValidationRunner
     {
         private const string Marker = "CodexRogueCleanerTest";
@@ -4112,6 +4492,11 @@ namespace RogueCleanerV2
                             : "验收失败：Detected=" + result.DetectedBeforeClean + ", Cleaned=" + result.CleanVerified + ", Restored=" + result.RestoreVerified + ", ScanAbsentAfterClean=" + absentAfterCleanScan + ", ExpectedPresentAfterCleanScan=" + testCase.ExpectPresentAfterCleanScan + ", ScanPresentAfterRestore=" + presentAfterRestoreScan;
                     }
                     report.Cases.Add(result);
+                }
+
+                foreach (ValidationCaseResult policyResult in Issue8RegressionChecks.Run(store))
+                {
+                    report.Cases.Add(policyResult);
                 }
 
                 report.AllRunnableCasesPassed = report.Cases.All(delegate(ValidationCaseResult c) { return c.Result == "Pass" || c.Result == "Skipped"; });
@@ -5598,7 +5983,7 @@ namespace RogueCleanerV2
                     {
                         // 清理后的自动复扫必须与手动扫描共用同一绑定入口，确保身份和图标重新异步解析。
                         ReplaceRows(refreshed);
-                        int failed = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
+                        int failed = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed" || r.Status == "RestoreFailed"; });
                         int launched = batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
                         string warningText = scanWarnings.Count == 0 ? string.Empty : "；" + scanWarnings.Count + " 个受保护位置未读取";
                         SetBusy(false, failed > 0 ? "处理后复核发现残留：" + failed + " 项" + warningText + "。" : "处理完成，已自动复扫" + warningText + "。");
@@ -6229,7 +6614,7 @@ namespace RogueCleanerV2
             cleanupOldButton.Enabled = batches.Count > 0;
             foreach (CleanupBatch batch in batches)
             {
-                int failed = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
+                int failed = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Failed" || r.Status == "RestoreFailed"; });
                 int done = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Done"; });
                 int launched = batch.Results == null ? 0 : batch.Results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
                 int total = batch.Results == null ? 0 : batch.Results.Count;
@@ -6261,7 +6646,7 @@ namespace RogueCleanerV2
             CleanupBatch batch = batches[batchList.SelectedIndex];
             List<CleanupResult> results = batch.Results ?? new List<CleanupResult>();
             int done = results.Count(delegate(CleanupResult r) { return r.Status == "Done"; });
-            int failed = results.Count(delegate(CleanupResult r) { return r.Status == "Failed"; });
+            int failed = results.Count(delegate(CleanupResult r) { return r.Status == "Failed" || r.Status == "RestoreFailed"; });
             int launched = results.Count(delegate(CleanupResult r) { return r.Status == "Launched"; });
             int skipped = results.Count(delegate(CleanupResult r) { return r.Status == "Skipped"; });
             foreach (CleanupResult result in results) { if (result.SoftwareIcon == null) result.SoftwareIcon = SoftwarePresentationResolver.PlaceholderIcon; if (string.IsNullOrEmpty(result.SoftwareName)) result.SoftwareName = "正在识别…"; }
@@ -6372,8 +6757,10 @@ namespace RogueCleanerV2
                 }
                 else
                 {
-                    statusLabel.Text = "恢复未完全成功，批次记录已保留。";
-                    MessageBox.Show("恢复未完全成功。\n\n成功：" + result.Succeeded + " 项\n失败：" + result.Failed + " 项\n\n失败记录已保留在恢复中心，方便你再次尝试。\n\n" + detail, "恢复失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    cleaner.RewriteBatchManifest(batch);
+                    LoadBatches();
+                    statusLabel.Text = "恢复未完全成功：成功项已从批次移除，失败项已保留，可再次尝试。";
+                    MessageBox.Show("恢复未完全成功。\n\n成功：" + result.Succeeded + " 项（已从恢复批次移除）\n失败：" + result.Failed + " 项（已保留在恢复中心，可再次尝试）\n\n" + detail, "恢复失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Exception ex)
@@ -6437,7 +6824,7 @@ namespace RogueCleanerV2
                 e.CellStyle.BackColor = Color.FromArgb(220, 252, 231);
                 e.CellStyle.ForeColor = Color.FromArgb(21, 128, 61);
             }
-            else if (status == "Failed")
+            else if (status == "Failed" || status == "RestoreFailed")
             {
                 e.CellStyle.BackColor = Color.FromArgb(254, 226, 226);
                 e.CellStyle.ForeColor = Color.FromArgb(185, 28, 28);
